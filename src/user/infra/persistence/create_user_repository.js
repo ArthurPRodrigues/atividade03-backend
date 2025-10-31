@@ -1,0 +1,3 @@
+class CreateUserRepository {
+    constructor(database) {
+        
