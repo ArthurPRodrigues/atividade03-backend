@@ -6,6 +6,9 @@ const app = express();
 app.use(express.json());
 const axios = require("axios");
 
+app.use(express.json()); // Para analisar corpos de requisições JSON
+app.use(express.urlencoded({ extended: true }));
+
 // Acessa o arquivo com o banco de dados
 var db = new sqlite3.Database("./dados_cadastro.db", (err) => {
   if (err) {
@@ -68,14 +71,12 @@ app.get("/Cadastro/:cpf", (req, res, next) => {
     `SELECT * FROM cadastro WHERE cpf = ?`,
     req.params.cpf,
     (err, result) => {
-      if (err) {
-        console.log("Erro: " + err);
-        res.status(500).send("Erro ao obter dados.");
-      } else if (result == null) {
+      if (result == null) {
         console.log("Cliente não encontrado.");
         res.status(404).send("Cliente não encontrado.");
       } else {
         res.status(200).json(result);
+        res.status(200).send("Cliente encontrado com sucesso!");
       }
     }
   );
