@@ -33,7 +33,7 @@ db.run(
   }
 );
 
-// Método HTTP POST /Cadastro - cadastra um novo cliente
+// Método HTTP POST /Cadastro - cadastra um novo cliente FUNCIONA
 app.post("/Cadastro", (req, res, next) => {
   db.run(
     `INSERT INTO cadastro (nome, email, cpf) VALUES (?, ?, ?)`,
@@ -44,8 +44,6 @@ app.post("/Cadastro", (req, res, next) => {
         res.status(500).send("Erro ao cadastrar cliente.");
       } else {
         const cpf = req.body.cpf;
-        const pontos = (req.body.pontos ? Number(req.body.pontos) : 0) + 1000;
-        axios.patch(`http://localhost:8090/pontos/${cpf}`, { pontos });
         console.log("Cliente cadastrado com sucesso!");
         res.status(200).send("Cliente cadastrado com sucesso!");
       }
@@ -53,7 +51,7 @@ app.post("/Cadastro", (req, res, next) => {
   );
 });
 
-// Método HTTP GET /Cadastro - retorna todos os clientes
+// Método HTTP GET /Cadastro - retorna todos os clientes FUNCIONA
 app.get("/Cadastro", (req, res, next) => {
   db.all(`SELECT * FROM cadastro`, [], (err, result) => {
     if (err) {
@@ -65,7 +63,7 @@ app.get("/Cadastro", (req, res, next) => {
   });
 });
 
-// Método HTTP GET /Cadastro/:cpf - retorna o cadastro de um cliente
+// Método HTTP GET /Cadastro/:cpf - retorna o cadastro de um cliente FUNCIONA
 app.get("/Cadastro/:cpf", (req, res, next) => {
   db.get(
     `SELECT * FROM cadastro WHERE cpf = ?`,
@@ -76,13 +74,12 @@ app.get("/Cadastro/:cpf", (req, res, next) => {
         res.status(404).send("Cliente não encontrado.");
       } else {
         res.status(200).json(result);
-        res.status(200).send("Cliente encontrado com sucesso!");
       }
     }
   );
 });
 
-// Método HTTP PATCH /Cadastro/:cpf - altera o cadastro de um cliente
+// Método HTTP PATCH /Cadastro/:cpf - altera o cadastro de um cliente FUNCIONA
 app.patch("/Cadastro/:cpf", (req, res, next) => {
   db.run(
     `UPDATE cadastro 
@@ -103,7 +100,7 @@ app.patch("/Cadastro/:cpf", (req, res, next) => {
   );
 });
 
-// Método HTTP DELETE /Cadastro/:cpf - remove um cliente do cadastro
+// Método HTTP DELETE /Cadastro/:cpf - remove um cliente do cadastro FUNCIONA
 app.delete("/Cadastro/:cpf", (req, res, next) => {
   db.run(`DELETE FROM cadastro WHERE cpf = ?`, req.params.cpf, function (err) {
     if (err) {
