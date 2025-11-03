@@ -7,7 +7,10 @@ app.use(logger("dev"));
 
 function selectProxyHost(req) {
   if (req.path.startsWith("/Cadastro")) return "http://localhost:8080/";
-  else if (req.path.startsWith("/Pontos")) return "http://localhost:8090/";
+  else if (req.path.startsWith("/Ingresso")) return "http://localhost:8090/";
+  else if (req.path.startsWith("/Atracao")) return "http://localhost:8100/";
+  else if (req.path.startsWith("/Fila")) return "http://localhost:8110/";
+  else if (req.path.startsWith("/Espera")) return "http://localhost:8120/";
   else return null;
 }
 
