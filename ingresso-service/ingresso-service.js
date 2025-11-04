@@ -1,86 +1,100 @@
 const sqlite3 = require("sqlite3");
 const express = require("express");
 const axios = require("axios");
-
 const app = express();
-app.use(express.json());
 
-// Acessa o arquivo com o banco de dados
+app.use(express.json()); // Para analisar corpos de requisições JSON
+app.use(express.urlencoded({ extended: true }));
+
+// Banco de dados
 var db = new sqlite3.Database("./dados_ingressos.db", (err) => {
   if (err) {
     console.log("ERRO: não foi possível conectar ao SQLite.");
     throw err;
   }
-  console.log("Conectado ao SQLite!");
+  console.log("Conectado ao banco de ingressos!");
 });
 
-// Cria a tabela ingresso
+// Criação da tabela
 db.run(
-  `CREATE TABLE IF NOT EXISTS ingresso 
-    (ID INTEGER PRIMARY KEY NOT NULL UNIQUE,
+  `CREATE TABLE IF NOT EXISTS ingresso (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
     CPF INTEGER NOT NULL,
     TIPO_INGRESSO TEXT NOT NULL,
-    NUMERO_ATRACOES INTEGER NOT NULL,
-    DATA_RESGATE DATE NOT NULL UNIQUE,
-    DATA_LIMITE DATE NOT NULL UNIQUE)`,
+    NUMERO_ATRACOES INTEGER,
+    DATA_RESGATE TEXT NOT NULL,
+    DATA_LIMITE TEXT
+  )`,
   [],
   (err) => {
-    if (err) {
-      console.log("ERRO: não foi possível criar tabela.");
-      throw err;
-    }
+    if (err) throw err;
   }
 );
 
-// Método HTTP POST /Ingresso - cadastra um novo ingresso
-app.post("/Ingresso", async (req, res) => {
+app.post("/Ingresso/:cpf", async (req, res) => {
   try {
-    const cpf = req.body.CPF;
+    const cpf = req.params.cpf;
+    const { TIPO_INGRESSO, NUMERO_ATRACOES } = req.body;
+
+    // Verifica se o CPF existe no serviço de cadastro
     const response = await axios.get(`http://localhost:8080/Cadastro/${cpf}`);
     const user = response.data;
-    const tipo_ingresso = req.body.TIPO_INGRESSO;
 
-    if (tipo_ingresso === "Day pass") {
-      data_resgate = now(data_resgate);
-      data_limite.setHours(data_limite.getHours() + 24);
-    } else if (tipo_ingresso === "Full pass") {
-      data_limite = null;
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
     }
 
-    if (user) {
-      db.run(
-        `INSERT INTO ingresso (ID, CPF, TIPO_INGRESSO, NUMERO_ATRACOES, DATA_RESGATE, DATA_LIMITE) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          req.body.ID,
-          cpf,
-          tipo_ingresso,
-          numero_atracoes,
-          data_resgate.toISOString(),
-          data_limite ? data_limite.toISOString() : null,
-        ],
-        (err) => {
-          if (err) {
-            console.log("Erro: " + err);
-            return res.status(500).send("Erro ao cadastrar ingresso.");
-          }
-          res.status(201).json({
-            message: "Ingresso cadastrado com sucesso",
-            data_limite: data_limite ? data_limite.toISOString() : null,
-          });
+    // Calcula as datas
+    const dataResgate = new Date();
+    let dataLimite = null;
+
+    if (TIPO_INGRESSO === "Day pass") {
+      dataLimite = new Date();
+      dataLimite.setDate(dataLimite.getDate() + 1);
+    } else if (TIPO_INGRESSO === "Full pass") {
+      dataLimite = new Date();
+      dataLimite.setDate(dataLimite.getDate() + 365);
+    } else if (TIPO_INGRESSO === "Limitado") {
+      dataLimite = null; // Apenas limitado pelo número de atrações
+    }
+
+    // Insere o ingresso no banco
+    db.run(
+      `INSERT INTO ingresso (CPF, TIPO_INGRESSO, NUMERO_ATRACOES, DATA_RESGATE, DATA_LIMITE)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        cpf,
+        TIPO_INGRESSO,
+        NUMERO_ATRACOES || 0,
+        dataResgate.toISOString(),
+        dataLimite ? dataLimite.toISOString() : null
+      ],
+      function (err) {
+        if (err) {
+          console.error("Erro ao cadastrar ingresso:", err.message);
+          return res.status(500).send("Erro ao cadastrar ingresso.");
         }
-      );
-    } else {
-      res.status(404).json({ error: "Usuário não encontrado" });
-    }
+
+        console.log(`Ingresso criado para o CPF ${cpf}!`);
+        res.status(201).json({
+          message: "Ingresso cadastrado com sucesso!",
+          id: this.lastID,
+          cpf,
+          TIPO_INGRESSO,
+          NUMERO_ATRACOES,
+          DATA_RESGATE: dataResgate,
+          DATA_LIMITE: dataLimite
+        });
+      }
+    );
   } catch (error) {
-    console.error("Erro na requisição:", error);
-    res.status(500).json({ error: "Erro ao processar a requisição" });
+    console.error("Erro na requisição:", error.message);
+    res.status(500).json({ error: "Erro ao processar a requisição." });
   }
 });
 
-// Inicia o servidor na porta 8090
+// Porta
 const PORT = process.env.PORT || 8090;
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Serviço de Ingressos rodando na porta ${PORT}`);
 });
