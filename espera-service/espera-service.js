@@ -6,16 +6,16 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Banco de dados para armazenar estimativas de espera
+// Cria o banco
 var db = new sqlite3.Database("./dados_espera.db", (err) => {
   if (err) {
-    console.log("❌ ERRO: não foi possível conectar ao SQLite.");
+    console.log("ERRO: não foi possível conectar ao SQLite.");
     throw err;
   }
-  console.log("✅ Conectado ao banco de tempos de espera!");
+  console.log("Conectado ao banco de tempos de espera!");
 });
 
-// Criação da tabela
+// Cria a tabela do banco
 db.run(
   `CREATE TABLE IF NOT EXISTS espera (
     id_atracao INTEGER PRIMARY KEY,
@@ -32,12 +32,12 @@ db.run(
   }
 );
 
-// Função principal: calcular e salvar tempos de espera
+// Calcula o tempo de espera
 async function atualizarTemposDeEspera() {
   try {
-    console.log("\n🔄 Atualizando tempos de espera...");
+    console.log("\n Atualizando tempos de espera...");
 
-    // Consulta microserviços
+    // Dois gets pra atração e fila
     const atracoesResp = await axios.get("http://localhost:8100/Atracao");
     const filasResp = await axios.get("http://localhost:8110/Fila");
 
@@ -45,14 +45,14 @@ async function atualizarTemposDeEspera() {
     const filas = filasResp.data;
 
     if (!Array.isArray(atracoes) || !Array.isArray(filas)) {
-      console.warn("⚠️ Nenhuma atração ou fila encontrada para atualização.");
+      console.warn("Nenhuma atração ou fila encontrada para atualização.");
       return;
     }
 
     for (const atracao of atracoes) {
       const fila = filas.find((f) => f.id_atracao === atracao.id);
       if (!fila) {
-        console.log(`⚠️ Atração '${atracao.nome}' ainda não possui fila registrada.`);
+        console.log(`Atração '${atracao.nome}' ainda não possui fila registrada.`);
         continue;
       }
 
@@ -62,7 +62,7 @@ async function atualizarTemposDeEspera() {
       const tempoEstimado = Math.ceil((pessoas / capacidade) * tempo_medio);
       const atualizadoEm = new Date().toISOString();
 
-      // Salva/atualiza no banco
+      // Atualiza banco
       db.run(
         `INSERT INTO espera (id_atracao, nome_atracao, pessoas_fila, capacidade, tempo_medio, tempo_estimado, atualizado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -77,35 +77,29 @@ async function atualizarTemposDeEspera() {
         (err) => {
           if (err)
             console.error(
-              `❌ Erro ao salvar tempo de espera para '${nome}':`,
+              `Erro ao salvar tempo de espera para '${nome}':`,
               err.message
             );
         }
       );
 
-      // Log detalhado de cada atração
+      // Log de cada atração
       console.log(
-        `🕹️ [${nome}] | Fila: ${pessoas} pessoas | Capacidade: ${capacidade} | ` +
-          `Tempo médio: ${tempo_medio} min | ⏱️ Estimado: ${tempoEstimado} min`
+        `[${nome}] | Fila: ${pessoas} pessoas | Capacidade: ${capacidade} | ` +
+          `Tempo médio: ${tempo_medio} min | Estimado: ${tempoEstimado} min`
       );
     }
 
-    console.log(`✅ Atualização concluída às ${new Date().toLocaleTimeString()}`);
+    console.log(`Atualização concluída às ${new Date().toLocaleTimeString()}`);
   } catch (error) {
-    console.error("❌ Erro ao atualizar tempos de espera:", error.message);
+    console.error("Erro ao atualizar tempos de espera:", error.message);
   }
 }
 
 // Atualiza automaticamente a cada 30 segundos
 setInterval(atualizarTemposDeEspera, 30000);
 
-// Permite atualizar manualmente (via Postman)
-app.post("/Espera/atualizar", async (req, res) => {
-  await atualizarTemposDeEspera();
-  res.send("Tempos de espera recalculados manualmente!");
-});
-
-// Consultar todos os tempos salvos
+// Consultar todas as esperas FUNCIONA
 app.get("/Espera", (req, res) => {
   db.all(`SELECT * FROM espera`, [], (err, rows) => {
     if (err) return res.status(500).send("Erro ao consultar tempos de espera.");
@@ -113,7 +107,7 @@ app.get("/Espera", (req, res) => {
   });
 });
 
-// Consultar tempo de espera de uma atração específica
+// Consultar espera de uma atração só FUNCIONA
 app.get("/Espera/:id_atracao", (req, res) => {
   db.get(
     `SELECT * FROM espera WHERE id_atracao = ?`,
@@ -126,7 +120,7 @@ app.get("/Espera/:id_atracao", (req, res) => {
   );
 });
 
-// Inicia o servidor e faz a primeira atualização imediata
+// Abre porta e atualiza
 app.listen(8120, () => {
   console.log("Estimador de Espera rodando na porta 8120");
   atualizarTemposDeEspera(); // primeira execução automática
