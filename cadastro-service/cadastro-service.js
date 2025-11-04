@@ -23,7 +23,8 @@ db.run(
   `CREATE TABLE IF NOT EXISTS cadastro 
     (nome TEXT NOT NULL, 
      email TEXT NOT NULL, 
-     cpf INTEGER PRIMARY KEY NOT NULL UNIQUE)`,
+     cpf INTEGER PRIMARY KEY NOT NULL UNIQUE,
+     telefone TEXT)`,
   [],
   (err) => {
     if (err) {
@@ -36,8 +37,8 @@ db.run(
 // Método HTTP POST /Cadastro - cadastra um novo cliente FUNCIONA
 app.post("/Cadastro", (req, res, next) => {
   db.run(
-    `INSERT INTO cadastro (nome, email, cpf) VALUES (?, ?, ?)`,
-    [req.body.nome, req.body.email, req.body.cpf],
+    `INSERT INTO cadastro (nome, email, cpf, telefone) VALUES (?, ?, ?, ?)`,
+    [req.body.nome, req.body.email, req.body.cpf, req.body.telefone],
     (err) => {
       if (err) {
         console.log("Erro: " + err);
@@ -84,9 +85,10 @@ app.patch("/Cadastro/:cpf", (req, res, next) => {
   db.run(
     `UPDATE cadastro 
      SET nome = COALESCE(?, nome), 
-         email = COALESCE(?, email) 
+         email = COALESCE(?, email),
+         telefone = COALESCE(?, telefone) 
      WHERE cpf = ?`,
-    [req.body.nome, req.body.email, req.params.cpf],
+    [req.body.nome, req.body.email, req.body.telefone, req.params.cpf],
     function (err) {
       if (err) {
         res.status(500).send("Erro ao alterar dados.");
