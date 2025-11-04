@@ -1,9 +1,9 @@
 const sqlite3 = require("sqlite3");
 const express = require("express");
 const axios = require("axios");
-const app = express();
 
-app.use(express.json()); // Para analisar corpos de requisições JSON
+const app = express();
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Banco de dados

@@ -31,28 +31,66 @@ db.run(
 );
 
 // Cadastrar nova atração FUNCIONA
-app.post("/Atracao", (req, res, next) => {
-  const status = req.body.status === false ? 0 : 1; // 1 = funcionando, 0 = manutenção
+app.post("/Atracao", async (req, res) => {
+  try {
+    const status = req.body.status === false ? 0 : 1; // 1 = funcionando, 0 = manutenção
 
-  db.run(
-    `INSERT INTO atracao (id, nome, capacidade, tempo_medio, status) VALUES (?, ?, ?, ?, ?)`,
-    [
-      req.body.id,
-      req.body.nome,
-      req.body.capacidade,
-      req.body.tempo_medio,
-      status,
-    ],
-    (err) => {
-      if (err) {
-        console.log("Erro: " + err);
-        res.status(500).send("Erro ao cadastrar atração.");
-      } else {
-        console.log("Atração cadastrada com sucesso!");
-        res.status(200).send("Atração cadastrada com sucesso!");
+    // Inserir a atração no banco local
+    db.run(
+      `INSERT INTO atracao (id, nome, capacidade, tempo_medio, status) VALUES (?, ?, ?, ?, ?)`,
+      [
+        req.body.id,
+        req.body.nome,
+        req.body.capacidade,
+        req.body.tempo_medio,
+        status
+      ],
+      async (err) => {
+        if (err) {
+          console.error("Erro ao cadastrar atração:", err.message);
+          return res.status(500).send("Erro ao cadastrar atração.");
+        }
+
+        console.log(`Atração '${req.body.nome}' cadastrada com sucesso!`);
+
+        // Cadastra a fila
+        try {
+          const filaResponse = await axios.post("http://localhost:8110/Fila", {
+            id_atracao: req.body.id,
+            pessoas: 0
+          });
+
+          console.log(`Fila criada para a atração ID ${req.body.id}.`);
+          res.status(201).json({
+            message: "Atração e fila criadas com sucesso!",
+            atracao: {
+              id: req.body.id,
+              nome: req.body.nome,
+              capacidade: req.body.capacidade,
+              tempo_medio: req.body.tempo_medio,
+              status
+            },
+            fila: filaResponse.data
+          });
+        } catch (filaError) {
+          console.error("Erro ao criar fila:", filaError.message);
+          res.status(201).json({
+            message: "Atração cadastrada, mas não foi possível criar a fila.",
+            atracao: {
+              id: req.body.id,
+              nome: req.body.nome,
+              capacidade: req.body.capacidade,
+              tempo_medio: req.body.tempo_medio,
+              status
+            }
+          });
+        }
       }
-    }
-  );
+    );
+  } catch (error) {
+    console.error("Erro na requisição:", error.message);
+    res.status(500).send("Erro ao processar cadastro da atração.");
+  }
 });
 
 // Listar todas as atrações FUNCIONA

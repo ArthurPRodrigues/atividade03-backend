@@ -79,30 +79,6 @@ app.get("/Cadastro/:cpf", (req, res, next) => {
   );
 });
 
-
-// Verificar o ingresso do cliente/cadastro FUNCIONA
-app.get("/Cadastro/:cpf/ingressos", async (req, res) => {
-  const cpf = req.params.cpf;
-  try {
-    // Primeiro verifica se o cliente existe
-    db.get(`SELECT * FROM cadastro WHERE cpf = ?`, [cpf], async (err, result) => {
-      if (err) return res.status(500).send("Erro ao buscar cliente.");
-      if (!result) return res.status(404).send("Cliente não encontrado.");
-
-      // Faz a requisição ao microserviço de ingresso
-      const response = await axios.get(`http://localhost:8090/Ingresso/usuario/${cpf}`);
-      res.status(200).json({
-        usuario: result,
-        ingressos: response.data
-      });
-    });
-  } catch (error) {
-    console.error("Erro ao buscar ingressos:", error.message);
-    res.status(500).send("Erro ao buscar ingressos do usuário.");
-  }
-});
-
-
 // Método HTTP PATCH /Cadastro/:cpf - altera o cadastro de um cliente FUNCIONA
 app.patch("/Cadastro/:cpf", (req, res, next) => {
   db.run(

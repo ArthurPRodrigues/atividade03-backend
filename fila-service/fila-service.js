@@ -3,6 +3,7 @@ const sqlite3 = require("sqlite3");
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Conexão com o banco de dados
 var db = new sqlite3.Database("./dados_filas.db", (err) => {
@@ -25,7 +26,7 @@ db.run(
   }
 );
 
-// Criar nova fila (inicialmente com 0 pessoas)
+// Criar nova fila (inicialmente com 0 pessoas) FUNCIONA
 app.post("/Fila", (req, res) => {
   const { id_atracao, pessoas } = req.body;
   db.run(
@@ -38,7 +39,7 @@ app.post("/Fila", (req, res) => {
   );
 });
 
-// Atualizar número de pessoas (incrementar/decrementar)
+// Atualizar número de pessoas (incrementar/decrementar) FUNCIONA
 app.patch("/Fila/:id_atracao", (req, res) => {
   const { pessoas } = req.body;
   db.run(
@@ -53,7 +54,7 @@ app.patch("/Fila/:id_atracao", (req, res) => {
   );
 });
 
-// Obter número de pessoas de uma fila
+// Obter número de pessoas de uma fila FUNCIONA
 app.get("/Fila/:id_atracao", (req, res) => {
   db.get(
     `SELECT * FROM fila WHERE id_atracao = ?`,
@@ -66,13 +67,34 @@ app.get("/Fila/:id_atracao", (req, res) => {
   );
 });
 
-// Listar todas as filas
+// Listar todas as filas FUNCIONA
 app.get("/Fila", (req, res) => {
   db.all(`SELECT * FROM fila`, [], (err, rows) => {
     if (err) return res.status(500).send("Erro ao listar filas.");
     res.json(rows);
   });
 });
+
+// Método HTTP DELETE /Fila/:id_atracao - remove uma fila específica
+app.delete("/Fila/:id_atracao", (req, res) => {
+  const id = req.params.id_atracao;
+
+  db.run(`DELETE FROM fila WHERE id_atracao = ?`, [id], function (err) {
+    if (err) {
+      console.error("Erro ao remover fila:", err.message);
+      return res.status(500).send("Erro ao remover fila.");
+    }
+
+    if (this.changes === 0) {
+      console.log(`Fila com id_atracao ${id} não encontrada.`);
+      return res.status(404).send("Fila não encontrada.");
+    }
+
+    console.log(`Fila ${id} removida com sucesso!`);
+    res.status(200).send("Fila removida com sucesso!");
+  });
+});
+
 
 // Iniciar servidor
 app.listen(8110, () => {
