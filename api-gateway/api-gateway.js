@@ -10,7 +10,7 @@ function selectProxyHost(req) {
   else if (req.path.startsWith("/Ingresso")) return "http://localhost:8090/";
   else if (req.path.startsWith("/Atracao")) return "http://localhost:8100/";
   else if (req.path.startsWith("/Fila")) return "http://localhost:8110/";
-  else if (req.path.startsWith("/Espera")) return "http://localhost:8120/";
+  else if (req.path.startsWith("/Acesso")) return "http://localhost:8120/";
   else return null;
 }
 

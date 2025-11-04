@@ -14,6 +14,7 @@ const services = [
     script: "./atracao-service/atracao-service.js",
   },
   { name: "Controle de Filas", script: "./fila-service/fila-service.js" },
+  { name: "Controle de Acessos", script: "./acesso-service/acesso-service.js" },
   { name: "API Gateway", script: "./api-gateway/api-gateway.js" },
 ];
 

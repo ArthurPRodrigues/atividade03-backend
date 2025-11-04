@@ -49,19 +49,19 @@ app.post("/Ingresso/:cpf", async (req, res) => {
     let dataLimite = null;
     let NUMERO_ATRACOES = 0;
 
-    if (TIPO_INGRESSO === "Day pass") {
+    if (TIPO_INGRESSO === "day-pass") {
       dataLimite = new Date();
       dataLimite.setDate(dataResgate.getDate() + 1);
-      NUMERO_ATRACOES = 10;
-    } else if (TIPO_INGRESSO === "Full pass") {
+      NUMERO_ATRACOES = null;
+    } else if (TIPO_INGRESSO === "anual-pass") {
       dataLimite = new Date();
       dataLimite.setDate(dataResgate.getDate() + 365);
       NUMERO_ATRACOES = null;
-    } else if (TIPO_INGRESSO === "Limitado") {
+    } else if (TIPO_INGRESSO === "stardard-pass") {
       dataLimite = null;
       NUMERO_ATRACOES = 10;
     } else {
-      NUMERO_ATRACOES = 10;
+      return res.status(400).json({ error: "Tipo de ingresso é inválido." });
     }
 
     // Insere o ingresso no banco
@@ -137,118 +137,6 @@ app.get("/Ingresso/usuario/:cpf", (req, res) => {
       res.status(200).json(rows);
     }
   );
-});
-
-// POST /Ingresso/:id/acessar-atracao/:id_atracao
-app.post("/Ingresso/:id/acessar-atracao/:id_atracao", async (req, res) => {
-  try {
-    const ingressoId = req.params.id;
-    const atracaoId = req.params.id_atracao;
-
-    // 1. Buscar o ingresso
-    db.get(
-      `SELECT * FROM ingresso WHERE ID = ?`,
-      [ingressoId],
-      async (err, ingresso) => {
-        if (err) {
-          console.error("Erro ao buscar ingresso:", err.message);
-          return res.status(500).send("Erro ao buscar ingresso.");
-        }
-
-        if (!ingresso) {
-          return res.status(404).json({ error: "Ingresso não encontrado." });
-        }
-
-        // 2. Verificar se o ingresso expirou (DATA_LIMITE)
-        if (ingresso.DATA_LIMITE) {
-          const dataLimite = new Date(ingresso.DATA_LIMITE);
-          const agora = new Date();
-
-          if (agora > dataLimite) {
-            return res.status(403).json({ error: "Ingresso expirado." });
-          }
-        }
-
-        // 3. Verificar se ainda tem atrações disponíveis (se for ingresso limitado)
-        if (
-          ingresso.TIPO_INGRESSO === "Limitado" ||
-          ingresso.TIPO_INGRESSO === "Day pass"
-        ) {
-          if (ingresso.NUMERO_ATRACOES <= 0) {
-            return res
-              .status(403)
-              .json({ error: "Ingresso sem atrações disponíveis." });
-          }
-        }
-
-        // 4. Verificar se a atração existe
-        try {
-          const atracaoResponse = await axios.get(
-            `http://localhost:8100/Atracao/${atracaoId}`
-          );
-          const atracao = atracaoResponse.data;
-
-          if (!atracao) {
-            return res.status(404).json({ error: "Atração não encontrada." });
-          }
-
-          if (!atracao.status) {
-            return res.status(403).json({ error: "Atração em manutenção." });
-          }
-
-          // 5. Decrementar o número de atrações (se não for Full pass ilimitado)
-          if (ingresso.TIPO_INGRESSO !== "Full pass") {
-            const novoNumero = ingresso.NUMERO_ATRACOES - 1;
-
-            db.run(
-              `UPDATE ingresso SET NUMERO_ATRACOES = ? WHERE ID = ?`,
-              [novoNumero, ingressoId],
-              function (err) {
-                if (err) {
-                  console.error("Erro ao atualizar ingresso:", err.message);
-                  return res.status(500).send("Erro ao atualizar ingresso.");
-                }
-
-                console.log(
-                  `Acesso registrado: Ingresso ${ingressoId} -> Atração ${atracaoId}`
-                );
-                res.status(200).json({
-                  message: "Acesso à atração registrado com sucesso!",
-                  ingresso_id: ingressoId,
-                  atracao_id: atracaoId,
-                  atracao_nome: atracao.nome,
-                  atracoes_restantes: novoNumero,
-                  tipo_ingresso: ingresso.TIPO_INGRESSO,
-                });
-              }
-            );
-          } else {
-            // Full pass - acesso ilimitado, não decrementa
-            console.log(
-              `Acesso registrado (Full Pass): Ingresso ${ingressoId} -> Atração ${atracaoId}`
-            );
-            res.status(200).json({
-              message: "Acesso à atração registrado com sucesso!",
-              ingresso_id: ingressoId,
-              atracao_id: atracaoId,
-              atracao_nome: atracao.nome,
-              atracoes_restantes: "Ilimitado",
-              tipo_ingresso: ingresso.TIPO_INGRESSO,
-            });
-          }
-        } catch (error) {
-          if (error.response && error.response.status === 404) {
-            return res.status(404).json({ error: "Atração não encontrada." });
-          }
-          console.error("Erro ao verificar atração:", error.message);
-          return res.status(500).json({ error: "Erro ao verificar atração." });
-        }
-      }
-    );
-  } catch (error) {
-    console.error("Erro ao processar acesso:", error.message);
-    res.status(500).json({ error: "Erro ao processar acesso à atração." });
-  }
 });
 
 // PATCH /Ingresso/:id - Atualizar ingresso
