@@ -324,7 +324,58 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
   }
 });
 
+// PASSAR PELA CATRACA
+app.patch("/Ingresso/usar/:id", (req, res) => {
+  const { id } = req.params;
+
+  db.get("SELECT * FROM ingresso WHERE ID = ?", [id], (err, ingresso) => {
+    if (err) {
+      return res.status(500).send("Erro ao buscar ingresso.");
+    }
+    if (!ingresso) {
+      return res.status(404).send("Ingresso não encontrado.");
+    }
+
+    if (ingresso.TIPO_INGRESSO === "standard") {
+      if (ingresso.NUMERO_ATRACOES <= 0) {
+        return res.status(400).send("Ingresso sem usos restantes.");
+      }
+
+      const novoValor = ingresso.NUMERO_ATRACOES - 1;
+      db.run(
+        "UPDATE ingresso SET NUMERO_ATRACOES = ? WHERE ID = ?",
+        [novoValor, id],
+        function (updateErr) {
+          if (updateErr) {
+            return res.status(500).send("Erro ao atualizar ingresso.");
+          }
+          res.status(200).json({
+            message: "Uso do ingresso registrado.",
+            tipo_ingresso: ingresso.TIPO_INGRESSO,
+            atracoes_restantes: novoValor,
+          });
+        }
+      );
+    } else if (ingresso.TIPO_INGRESSO === "day" || ingresso.TIPO_INGRESSO === "anual") {
+      const dataLimite = ingresso.DATA_LIMITE ? new Date(ingresso.DATA_LIMITE) : null;
+      const dataAtual = new Date();
+
+      if (dataLimite && dataLimite < dataAtual) {
+        return res.status(400).send("Ingresso expirado.");
+      }
+
+      res.status(200).json({
+        message: "Uso do ingresso registrado (ilimitado).",
+        tipo_ingresso: ingresso.TIPO_INGRESSO,
+        atracoes_restantes: "Ilimitado",
+      });
+    } else {
+      res.status(400).send("Tipo de ingresso inválido.");
+    }
+  });
+});
+
 const PORT = process.env.PORT || 8090;
 app.listen(PORT, () => {
-  console.log(`Serviço de Ingressos rodando na porta ${PORT}`);
+  console.log(`Ingressos rodando na porta ${PORT}`);
 });

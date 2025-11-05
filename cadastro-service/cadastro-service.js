@@ -12,7 +12,7 @@ var db = new sqlite3.Database("./dados_cadastro.db", (err) => {
     console.log("ERRO: não foi possível conectar ao SQLite.");
     throw err;
   }
-  console.log("Conectado ao SQLite!");
+  console.log("Conectado ao banco");
 });
 
 db.run(
