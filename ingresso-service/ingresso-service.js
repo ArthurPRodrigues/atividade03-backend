@@ -31,7 +31,7 @@ db.run(
   }
 );
 
-//todo: verificar uma maneira melhor de formatar as datas e deixar no modelo UTC -3
+//todo: verificar uma maneira melhor de formatar as datas e deixar no modelo UTC -3 --- Po, isso aqui não é necessário não, deixa baixo
 // POST /Ingresso - Cadastrar novo ingresso
 app.post("/Ingresso/:cpf", async (req, res) => {
   try {

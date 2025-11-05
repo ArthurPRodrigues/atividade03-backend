@@ -158,7 +158,7 @@ app.patch("/Espera/:id_atracao", (req, res) => {
   );
 });
 
-// DELETA espera COM PROBLEMA: Não consigo usar via requisição pelo delete da 
+// DELETA espera FUNCIONA - Se for requisição, tem que chamar antes de deletar fila, que tem que chamar antes de deletar Atracao
 app.delete("/Espera/:id_atracao", (req, res) => {
   const id = Number(req.params.id_atracao);
 
