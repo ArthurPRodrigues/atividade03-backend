@@ -160,14 +160,28 @@ app.patch("/Espera/:id_atracao", (req, res) => {
   );
 });
 
-// Deleta espera da atração
+// DELETA espera COM PROBLEMA
 app.delete("/Espera/:id_atracao", (req, res) => {
-  db.run(`DELETE FROM espera WHERE id_atracao = ?`, [req.params.id_atracao], function (err) {
-    if (err) return res.status(500).send("Erro ao excluir tempo de espera.");
-    if (this.changes === 0) return res.status(404).send("Registro não encontrado.");
+  const id = Number(req.params.id_atracao);
+
+  console.log(`🗑️ Tentando deletar espera com id_atracao = ${id}`);
+
+  db.run(`DELETE FROM espera WHERE id_atracao = ?`, [id], function (err) {
+    if (err) {
+      console.error("Erro ao excluir tempo de espera:", err.message);
+      return res.status(500).send("Erro ao excluir tempo de espera.");
+    }
+
+    if (this.changes === 0) {
+      console.log(`❌ Nenhum registro encontrado com id_atracao = ${id}`);
+      return res.status(404).send("Registro não encontrado.");
+    }
+
+    console.log(`✅ Tempo de espera excluído com sucesso! (id: ${id})`);
     res.send("Tempo de espera excluído com sucesso!");
   });
 });
+
 
 // Inicialização
 app.listen(8120, () => {
