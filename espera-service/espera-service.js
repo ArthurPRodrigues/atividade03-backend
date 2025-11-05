@@ -31,9 +31,12 @@ db.run(
 );
 
 // Função principal de atualização
+const contadorTempo = {}; // Bati MUITO a cabeça com isso. No final decidi usar um contador fora da função mesmo
+
+
+//Favor não mexer pq ESTÁ FUNCIONANDO
 async function atualizarTemposDeEspera() {
   try {
-
     const atracoesResp = await axios.get("http://localhost:8100/Atracao");
     const filasResp = await axios.get("http://localhost:8110/Fila");
 
@@ -47,21 +50,38 @@ async function atualizarTemposDeEspera() {
 
     for (const atracao of atracoes) {
       const fila = filas.find((f) => f.id_atracao === atracao.id);
-      if (!fila) {
-        console.log(`Atração '${atracao.nome}' ainda não possui fila registrada.`);
-        continue;
-      }
+      if (!fila) continue;
 
       const { id, nome, capacidade, tempo_medio, status } = atracao;
-      const pessoas = fila.pessoas;
-      const atualizadoEm = new Date().toISOString();
+      let pessoas = fila.pessoas;
+      const agora = new Date();
+      const atualizadoEm = agora.toISOString();
 
       let tempoEstimado;
 
       if (status === 0) {
         tempoEstimado = "Atração em manutenção";
+        contadorTempo[id] = 0;
       } else {
-        // Calculo do tempo de espera
+        if (!contadorTempo[id]) contadorTempo[id] = 0;
+        contadorTempo[id] += 0.5;
+        if (contadorTempo[id] >= tempo_medio && pessoas > 0) {
+          const novaFila = Math.max(pessoas - capacidade, 0);
+
+          try {
+            await axios.patch(`http://localhost:8110/Fila/${id}`, {
+              pessoas: novaFila,
+            });
+            pessoas = novaFila;
+            contadorTempo[id] = 0;
+            console.log(
+              `${nome} terminou e a fila andou. ${fila.pessoas} → ${novaFila}`
+            );
+          } catch (err) {
+            console.error(`Erro ao atualizar fila da atração '${nome}':`, err.message);
+          }
+        }
+
         const ciclos = Math.floor(pessoas / capacidade);
         tempoEstimado = `${ciclos * tempo_medio} min`;
       }
@@ -82,14 +102,9 @@ async function atualizarTemposDeEspera() {
             console.error(`Erro ao salvar tempo de espera para '${nome}':`, err.message);
         }
       );
-
-      console.log(
-        `[${nome}] | Fila: ${pessoas} pessoas | Capacidade: ${capacidade} | ` +
-        `Tempo médio: ${tempo_medio} min | Estimado: ${tempoEstimado}`
-      );
     }
 
-    console.log(`Atualização concluída às ${new Date().toLocaleTimeString()}`);
+    console.log(`⏱️ Atualização concluída às ${new Date().toLocaleTimeString()}`);
   } catch (error) {
     console.error("Erro ao atualizar tempos de espera:", error.message);
   }
