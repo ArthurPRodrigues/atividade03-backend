@@ -236,7 +236,6 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
       );
       atracao = atracaoResponse.data;
     } catch (error) {
-      console.error("Erro ao buscar atração:", error.message);
       return res.status(404).json({ error: "Atração não encontrada." });
     }
 
@@ -277,6 +276,19 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
       return res.status(404).json({ error: "Informações não encontradas." });
     }
 
+    // --- Verifica tempo estimado de espera ---
+    let tempo_estimado;
+    try {
+      const esperaResponse = await axios.get(`http://localhost:8120/Espera/${id_atracao}`);
+      const espera = esperaResponse.data;
+      if (espera) {
+        tempo_estimado = espera.tempo_estimado;
+      }
+    } catch (error) {
+      console.error("Erro ao buscar tempo estimado:", error.message);
+      tempo_estimado = "Indisponível";  // Caso não consiga recuperar o tempo estimado
+    }
+
     // --- Verifica tipo de ingresso STANDARD ---
     if (ingresso.TIPO_INGRESSO === "standard") {
       if (ingresso.NUMERO_ATRACOES <= 0) {
@@ -310,6 +322,7 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
             posicao_fila: fila_atualizada,
             tipo_ingresso: ingresso.TIPO_INGRESSO,
             atracoes_restantes: ingresso.NUMERO_ATRACOES - 1,
+            tempo_estimado,
           });
         }
       );
@@ -330,6 +343,7 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
         posicao_fila: fila_atualizada,
         tipo_ingresso: ingresso.TIPO_INGRESSO,
         atracoes_restantes: "Ilimitado",
+        tempo_estimado,
       });
     } else {
       return res.status(400).json({
@@ -342,56 +356,6 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
   }
 });
 
-// PASSAR PELA CATRACA
-app.patch("/Ingresso/usar/:id", (req, res) => {
-  const { id } = req.params;
-
-  db.get("SELECT * FROM ingresso WHERE ID = ?", [id], (err, ingresso) => {
-    if (err) {
-      return res.status(500).send("Erro ao buscar ingresso.");
-    }
-    if (!ingresso) {
-      return res.status(404).send("Ingresso não encontrado.");
-    }
-
-    if (ingresso.TIPO_INGRESSO === "standard") {
-      if (ingresso.NUMERO_ATRACOES <= 0) {
-        return res.status(400).send("Ingresso sem usos restantes.");
-      }
-
-      const novoValor = ingresso.NUMERO_ATRACOES - 1;
-      db.run(
-        "UPDATE ingresso SET NUMERO_ATRACOES = ? WHERE ID = ?",
-        [novoValor, id],
-        function (updateErr) {
-          if (updateErr) {
-            return res.status(500).send("Erro ao atualizar ingresso.");
-          }
-          res.status(200).json({
-            message: "Uso do ingresso registrado.",
-            tipo_ingresso: ingresso.TIPO_INGRESSO,
-            atracoes_restantes: novoValor,
-          });
-        }
-      );
-    } else if (ingresso.TIPO_INGRESSO === "day" || ingresso.TIPO_INGRESSO === "anual") {
-      const dataLimite = ingresso.DATA_LIMITE ? new Date(ingresso.DATA_LIMITE) : null;
-      const dataAtual = new Date();
-
-      if (dataLimite && dataLimite < dataAtual) {
-        return res.status(400).send("Ingresso expirado.");
-      }
-
-      res.status(200).json({
-        message: "Uso do ingresso registrado (ilimitado).",
-        tipo_ingresso: ingresso.TIPO_INGRESSO,
-        atracoes_restantes: "Ilimitado",
-      });
-    } else {
-      res.status(400).send("Tipo de ingresso inválido.");
-    }
-  });
-});
 
 const PORT = process.env.PORT || 8090;
 app.listen(PORT, () => {
