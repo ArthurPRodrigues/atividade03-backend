@@ -33,8 +33,6 @@ db.run(
 // Função principal de atualização
 const contadorTempo = {}; // Bati MUITO a cabeça com isso. No final decidi usar um contador fora da função mesmo
 
-
-//Favor não mexer pq ESTÁ FUNCIONANDO
 async function atualizarTemposDeEspera() {
   try {
     const atracoesResp = await axios.get("http://localhost:8100/Atracao");
@@ -59,12 +57,14 @@ async function atualizarTemposDeEspera() {
 
       let tempoEstimado;
 
-      if (status === 0) {
+      if (status === 0 || status === false) {
         tempoEstimado = "Atração em manutenção";
         contadorTempo[id] = 0;
+        console.log(`${nome} está em manutenção. Nenhum ciclo será executado.`);
       } else {
         if (!contadorTempo[id]) contadorTempo[id] = 0;
         contadorTempo[id] += 0.5;
+
         if (contadorTempo[id] >= tempo_medio && pessoas > 0) {
           const novaFila = Math.max(pessoas - capacidade, 0);
 
@@ -74,14 +74,13 @@ async function atualizarTemposDeEspera() {
             });
             pessoas = novaFila;
             contadorTempo[id] = 0;
-            console.log(
-              `${nome} terminou e a fila andou. ${fila.pessoas} → ${novaFila}`
-            );
+            console.log(`${nome}: ciclo completo → fila reduzida de ${fila.pessoas} para ${novaFila}.`);
           } catch (err) {
             console.error(`Erro ao atualizar fila da atração '${nome}':`, err.message);
           }
         }
 
+        // Calcula tempo estimado de espera com base na fila atual
         const ciclos = Math.floor(pessoas / capacidade);
         tempoEstimado = `${ciclos * tempo_medio} min`;
       }
@@ -98,8 +97,7 @@ async function atualizarTemposDeEspera() {
             atualizado_em = excluded.atualizado_em`,
         [id, nome, pessoas, capacidade, tempo_medio, tempoEstimado, atualizadoEm],
         (err) => {
-          if (err)
-            console.error(`Erro ao salvar tempo de espera para '${nome}':`, err.message);
+          if (err) console.error(`Erro ao salvar tempo de espera para '${nome}':`, err.message);
         }
       );
     }
@@ -109,6 +107,7 @@ async function atualizarTemposDeEspera() {
     console.error("Erro ao atualizar tempos de espera:", error.message);
   }
 }
+
 
 //Atualizando de 30 em 30 seg
 setInterval(atualizarTemposDeEspera, 30000);
