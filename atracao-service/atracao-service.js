@@ -30,7 +30,7 @@ db.run(
   }
 );
 
-// Cadastrar nova atração FUNCIONA
+// Cadastrar nova atração + fila + espera
 app.post("/Atracao", async (req, res) => {
   try {
     const status = req.body.status === false ? 0 : 1; // 1 = funcionando, 0 = manutenção
@@ -52,16 +52,31 @@ app.post("/Atracao", async (req, res) => {
 
         console.log(`Atração '${req.body.nome}' cadastrada com sucesso!`);
 
-        // Cadastra a fila
+        // Cria fila e espera associadas
         try {
+          // Cria fila
           const filaResponse = await axios.post("http://localhost:8110/Fila", {
             id_atracao: req.body.id,
             pessoas: 0,
           });
-
           console.log(`Fila criada para a atração ID ${req.body.id}.`);
-          res.status(201).json({
-            message: "Atração e fila criadas com sucesso!",
+
+          // Cria espera
+          const esperaResponse = await axios.post(
+            "http://localhost:8120/Espera",
+            {
+              id_atracao: req.body.id,
+              nome_atracao: req.body.nome,
+              pessoas_fila: 0,
+              capacidade: req.body.capacidade,
+              tempo_medio: req.body.tempo_medio,
+              tempo_estimado: "Calculando...",
+            }
+          );
+          console.log(`Espera criada para a atração ID ${req.body.id}.`);
+
+          return res.status(201).json({
+            message: "Atração, fila e espera criadas com sucesso!",
             atracao: {
               id: req.body.id,
               nome: req.body.nome,
@@ -70,18 +85,16 @@ app.post("/Atracao", async (req, res) => {
               status,
             },
             fila: filaResponse.data,
+            espera: esperaResponse.data,
           });
-        } catch (filaError) {
-          console.error("Erro ao criar fila:", filaError.message);
-          res.status(201).json({
-            message: "Atração cadastrada, mas não foi possível criar a fila.",
-            atracao: {
-              id: req.body.id,
-              nome: req.body.nome,
-              capacidade: req.body.capacidade,
-              tempo_medio: req.body.tempo_medio,
-              status,
-            },
+        } catch (subErr) {
+          console.error(
+            "Erro ao criar fila ou espera para a atração:",
+            subErr.message
+          );
+          return res.status(201).json({
+            message:
+              "Atração cadastrada, mas não foi possível criar fila e/ou espera.",
           });
         }
       }
@@ -97,7 +110,6 @@ app.get("/Atracao", (req, res) => {
   db.all(`SELECT * FROM atracao`, [], (err, rows) => {
     if (err) return res.status(500).send("Erro ao listar atrações.");
 
-    // Conversor booleano
     const atracoes = rows.map((a) => ({
       ...a,
       status: !!a.status,
@@ -113,7 +125,6 @@ app.get("/Atracao/:id", (req, res) => {
     if (err) return res.status(500).send("Erro ao consultar atração.");
     if (!row) return res.status(404).send("Atração não encontrada.");
 
-    // Conversor Booleano
     row.status = !!row.status;
     res.json(row);
   });
@@ -123,12 +134,21 @@ app.get("/Atracao/:id", (req, res) => {
 app.patch("/Atracao/:id", (req, res) => {
   const { nome, capacidade, tempo_medio } = req.body;
 
-  // Converte 'status' corretamente, seja booleano ou string
   let status;
   if (req.body.status !== undefined) {
-    if (req.body.status === true || req.body.status === "true" || req.body.status === 1 || req.body.status === "1") {
+    if (
+      req.body.status === true ||
+      req.body.status === "true" ||
+      req.body.status === 1 ||
+      req.body.status === "1"
+    ) {
       status = 1;
-    } else if (req.body.status === false || req.body.status === "false" || req.body.status === 0 || req.body.status === "0") {
+    } else if (
+      req.body.status === false ||
+      req.body.status === "false" ||
+      req.body.status === 0 ||
+      req.body.status === "0"
+    ) {
       status = 0;
     } else {
       status = undefined;
@@ -152,26 +172,47 @@ app.patch("/Atracao/:id", (req, res) => {
   );
 });
 
-
-// Deletar atraçõa
+// Deletar espera, fila e atração NESSA ORDEM
 app.delete("/Atracao/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    db.run(`DELETE FROM atracao WHERE id = ?`, [id], async function (err) {
-      if (err) return res.status(500).send("Erro ao remover atração.");
-      if (this.changes === 0)
-        return res.status(404).send("Atração não encontrada.");
 
-      try {
-        // Manda o delete pra fila
-        await axios.delete(`http://localhost:8110/Fila/${id}`);
-        console.log(`Fila da atração ${id} removida com sucesso.`);
-      } catch (filaErr) {
-        console.warn(`Aviso: fila da atração ${id} não pôde ser removida.`);
+    console.log(`Requisição para deletar atração ${id}`);
+
+    // Deleta a espera
+    try {
+      await axios.delete(`http://localhost:8120/Espera/${id}`);
+      console.log(`Espera da atração ${id} removida com sucesso.`);
+    } catch (esperaErr) {
+      console.warn(
+        `Aviso: não foi possível remover a espera da atração ${id} - ${esperaErr.message}`
+      );
+    }
+
+    // Deleta a fila
+    try {
+      await axios.delete(`http://localhost:8110/Fila/${id}`);
+      console.log(`Fila da atração ${id} removida com sucesso.`);
+    } catch (filaErr) {
+      console.warn(
+        `Aviso: não foi possível remover a fila da atração ${id} - ${filaErr.message}`
+      );
+    }
+
+    // Remove a atração local
+    db.run(`DELETE FROM atracao WHERE id = ?`, [id], function (err) {
+      if (err) {
+        console.error("Erro ao remover atração:", err.message);
+        return res.status(500).send("Erro ao remover atração.");
       }
 
+      if (this.changes === 0) {
+        console.warn(`Atração ${id} não encontrada no banco.`);
+        return res.status(404).send("Atração não encontrada.");
+      }
 
-      res.send("Atração e sua fila removidas");
+      console.log(`Atração ${id} e seus registros associados foram removidos.`);
+      res.status(200).send("Atração, fila e espera removidas com sucesso!");
     });
   } catch (error) {
     console.error("Erro ao excluir atração:", error.message);

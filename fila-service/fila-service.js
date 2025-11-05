@@ -50,16 +50,6 @@ app.post("/Fila", async (req, res) => {
         const atracaoResp = await axios.get(`http://localhost:8100/Atracao/${id_atracao}`);
         const atracao = atracaoResp.data;
 
-        // Faz um post pra criar a espera
-        await axios.post(`http://localhost:8120/Espera`, {
-          id_atracao: atracao.id,
-          nome_atracao: atracao.nome,
-          pessoas_fila: pessoas || 0,
-          capacidade: atracao.capacidade,
-          tempo_medio: atracao.tempo_medio,
-          tempo_estimado: "Calculando..."
-        });
-
         console.log(`Tempo de espera inicial criado para ${atracao.nome}.`);
       } catch (error) {
         console.warn("Aviso: falha ao atualizar atração ou espera:", error.message);
@@ -127,11 +117,6 @@ app.delete("/Fila/:id_atracao", async (req, res) => {
     try {
       // Coloca atração em manutenção
       await axios.patch(`http://localhost:8100/Atracao/${id}`, { status: false });
-
-      // Deleta espera correspondente
-      console.log(`Tentando deletar tempo de espera da atração ${id}...`);
-      const resp = await axios.delete(`http://localhost:8120/Espera/${id}`);
-      console.log(`Resposta do serviço de espera: ${resp.status} ${resp.statusText}`);
 
       console.log(`Atração ${id} colocada em manutenção e espera removida.`);
     } catch (error) {

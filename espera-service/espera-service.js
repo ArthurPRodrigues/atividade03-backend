@@ -62,11 +62,9 @@ async function atualizarTemposDeEspera() {
       let tempoEstimado;
 
       if (status === 0) {
-        // Atração em manutenção
         tempoEstimado = "Em manutenção";
       } else {
-        // --- CÁLCULO DO TEMPO DE ESPERA ---
-        // Versão mais realista: desconsidera o grupo atual (usa Math.floor)
+        // Calculando o tempo de espera
         const ciclos = Math.floor(pessoas / capacidade);
         tempoEstimado = `${ciclos * tempo_medio} min`;
       }
@@ -137,7 +135,7 @@ app.get("/Espera/:id_atracao", (req, res) => {
   });
 });
 
-// Atualiza uma atração
+// Atualiza a espera de uma atração
 app.patch("/Espera/:id_atracao", (req, res) => {
   const { nome_atracao, pessoas_fila, capacidade, tempo_medio, tempo_estimado } = req.body;
   const atualizado_em = new Date().toISOString();
@@ -160,11 +158,11 @@ app.patch("/Espera/:id_atracao", (req, res) => {
   );
 });
 
-// DELETA espera COM PROBLEMA
+// DELETA espera COM PROBLEMA: Não consigo usar via requisição pelo delete da 
 app.delete("/Espera/:id_atracao", (req, res) => {
   const id = Number(req.params.id_atracao);
 
-  console.log(`🗑️ Tentando deletar espera com id_atracao = ${id}`);
+  console.log(`Tentando deletar espera com id_atracao = ${id}`);
 
   db.run(`DELETE FROM espera WHERE id_atracao = ?`, [id], function (err) {
     if (err) {
@@ -173,11 +171,11 @@ app.delete("/Espera/:id_atracao", (req, res) => {
     }
 
     if (this.changes === 0) {
-      console.log(`❌ Nenhum registro encontrado com id_atracao = ${id}`);
+      console.log(`Nenhum registro encontrado com id_atracao = ${id}`);
       return res.status(404).send("Registro não encontrado.");
     }
 
-    console.log(`✅ Tempo de espera excluído com sucesso! (id: ${id})`);
+    console.log(`Tempo de espera excluído com sucesso! (id: ${id})`);
     res.send("Tempo de espera excluído com sucesso!");
   });
 });
