@@ -1,6 +1,7 @@
 const express = require("express");
 const sqlite3 = require("sqlite3");
 
+const axios = require("axios");
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -41,15 +42,30 @@ app.post("/Fila", async (req, res) => {
 
       console.log(`Fila criada com sucesso para atração ${id_atracao}.`);
 
-      // Da um PATCH na atracao pra colocar ela em manutenção
       try {
+        // passa atracao para true caso seja false
         await axios.patch(`http://localhost:8100/Atracao/${id_atracao}`, { status: true });
         console.log(`Atração ${id_atracao} ativada com sucesso.`);
-      } catch (patchErr) {
-        console.warn(`Aviso: não foi possível ativar a atração ${id_atracao}.`);
+
+        const atracaoResp = await axios.get(`http://localhost:8100/Atracao/${id_atracao}`);
+        const atracao = atracaoResp.data;
+
+        // Faz um post pra criar a espera
+        await axios.post(`http://localhost:8120/Espera`, {
+          id_atracao: atracao.id,
+          nome_atracao: atracao.nome,
+          pessoas_fila: pessoas || 0,
+          capacidade: atracao.capacidade,
+          tempo_medio: atracao.tempo_medio,
+          tempo_estimado: "Calculando..."
+        });
+
+        console.log(`Tempo de espera inicial criado para ${atracao.nome}.`);
+      } catch (error) {
+        console.warn("Aviso: falha ao atualizar atração ou espera:", error.message);
       }
 
-      res.status(201).send("Fila criada e atração ativada com sucesso!");
+      res.status(201).send("Fila criada, atração ativada e espera inicial registrada!");
     }
   );
 });
@@ -90,10 +106,10 @@ app.get("/Fila", (req, res) => {
   });
 });
 
-const axios = require("axios");
 
+// Deleta fila FUNCIONA
 app.delete("/Fila/:id_atracao", async (req, res) => {
-  const id = req.params.id_atracao;
+  const id = Number(req.params.id_atracao); // 🔹 conversão explícita
 
   db.run(`DELETE FROM fila WHERE id_atracao = ?`, [id], async function (err) {
     if (err) {
@@ -108,18 +124,29 @@ app.delete("/Fila/:id_atracao", async (req, res) => {
 
     console.log(`Fila ${id} removida com sucesso!`);
 
-    // Da um PATCH na atracao pra deixar ela em manutenção
     try {
+      // Coloca atração em manutenção
       await axios.patch(`http://localhost:8100/Atracao/${id}`, { status: false });
-      console.log(`Atração ${id} colocada em manutenção com sucesso.`);
-    } catch (patchErr) {
-      console.warn(`Aviso: não foi possível alterar status da atração ${id}.`);
+
+      // Deleta espera correspondente
+      console.log(`Tentando deletar tempo de espera da atração ${id}...`);
+      const resp = await axios.delete(`http://localhost:8120/Espera/${id}`);
+      console.log(`Resposta do serviço de espera: ${resp.status} ${resp.statusText}`);
+
+      console.log(`Atração ${id} colocada em manutenção e espera removida.`);
+    } catch (error) {
+      if (error.response) {
+        console.warn(
+          `Erro ao deletar espera: ${error.response.status} ${error.response.statusText} - ${error.response.data}`
+        );
+      } else {
+        console.warn("Erro ao contatar serviço de espera:", error.message);
+      }
     }
 
-    res.status(200).send("Fila removida e atração colocada em manutenção!");
+    res.status(200).send("Fila removida, atração em manutenção e espera excluída!");
   });
 });
-
 
 
 // Iniciar servidor

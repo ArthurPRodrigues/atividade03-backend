@@ -104,7 +104,23 @@ async function atualizarTemposDeEspera() {
 // Atualiza automaticamente a cada 30 segundos
 setInterval(atualizarTemposDeEspera, 30000);
 
-// Consultar todas as esperas
+// Cria a espera
+app.post("/Espera", (req, res) => {
+  const { id_atracao, nome_atracao, pessoas_fila, capacidade, tempo_medio, tempo_estimado } = req.body;
+  const atualizado_em = new Date().toISOString();
+
+  db.run(
+    `INSERT INTO espera (id_atracao, nome_atracao, pessoas_fila, capacidade, tempo_medio, tempo_estimado, atualizado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id_atracao, nome_atracao, pessoas_fila, capacidade, tempo_medio, tempo_estimado, atualizado_em],
+    (err) => {
+      if (err) return res.status(500).send("Erro ao criar registro de espera.");
+      res.status(201).send("Tempo de espera criado com sucesso!");
+    }
+  );
+});
+
+// Consultar espera de todas as atrações
 app.get("/Espera", (req, res) => {
   db.all(`SELECT * FROM espera`, [], (err, rows) => {
     if (err) return res.status(500).send("Erro ao consultar tempos de espera.");
@@ -114,15 +130,43 @@ app.get("/Espera", (req, res) => {
 
 // Consultar espera de uma atração
 app.get("/Espera/:id_atracao", (req, res) => {
-  db.get(
-    `SELECT * FROM espera WHERE id_atracao = ?`,
-    [req.params.id_atracao],
-    (err, row) => {
-      if (err) return res.status(500).send("Erro ao consultar tempo de espera.");
-      if (!row) return res.status(404).send("Atração não encontrada.");
-      res.json(row);
+  db.get(`SELECT * FROM espera WHERE id_atracao = ?`, [req.params.id_atracao], (err, row) => {
+    if (err) return res.status(500).send("Erro ao consultar tempo de espera.");
+    if (!row) return res.status(404).send("Atração não encontrada.");
+    res.json(row);
+  });
+});
+
+// Atualiza uma atração
+app.patch("/Espera/:id_atracao", (req, res) => {
+  const { nome_atracao, pessoas_fila, capacidade, tempo_medio, tempo_estimado } = req.body;
+  const atualizado_em = new Date().toISOString();
+
+  db.run(
+    `UPDATE espera
+     SET nome_atracao = COALESCE(?, nome_atracao),
+         pessoas_fila = COALESCE(?, pessoas_fila),
+         capacidade = COALESCE(?, capacidade),
+         tempo_medio = COALESCE(?, tempo_medio),
+         tempo_estimado = COALESCE(?, tempo_estimado),
+         atualizado_em = ?
+     WHERE id_atracao = ?`,
+    [nome_atracao, pessoas_fila, capacidade, tempo_medio, tempo_estimado, atualizado_em, req.params.id_atracao],
+    function (err) {
+      if (err) return res.status(500).send("Erro ao atualizar tempo de espera.");
+      if (this.changes === 0) return res.status(404).send("Atração não encontrada.");
+      res.send("Tempo de espera atualizado com sucesso!");
     }
   );
+});
+
+// Deleta espera da atração
+app.delete("/Espera/:id_atracao", (req, res) => {
+  db.run(`DELETE FROM espera WHERE id_atracao = ?`, [req.params.id_atracao], function (err) {
+    if (err) return res.status(500).send("Erro ao excluir tempo de espera.");
+    if (this.changes === 0) return res.status(404).send("Registro não encontrado.");
+    res.send("Tempo de espera excluído com sucesso!");
+  });
 });
 
 // Inicialização
