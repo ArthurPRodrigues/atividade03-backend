@@ -21,9 +21,9 @@ db.run(
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     CPF INTEGER NOT NULL,
     TIPO_INGRESSO TEXT NOT NULL,
-    NUMERO_ATRACOES INTEGER,
+    NUMERO_ATRACOES INTEGER NOT NULL,
     DATA_RESGATE TEXT NOT NULL,
-    DATA_LIMITE TEXT
+    DATA_LIMITE TEXT NOT NULL
   )`,
   [],
   (err) => {
@@ -31,6 +31,8 @@ db.run(
   }
 );
 
+//todo: verificar uma maneira melhor de formatar as datas e deixar no modelo UTC -3
+// POST /Ingresso - Cadastrar novo ingresso
 app.post("/Ingresso/:cpf", async (req, res) => {
   try {
     const cpf = req.params.cpf;
@@ -49,15 +51,15 @@ app.post("/Ingresso/:cpf", async (req, res) => {
     let dataLimite = null;
     let NUMERO_ATRACOES = 0;
 
-    if (TIPO_INGRESSO === "day-pass") {
+    if (TIPO_INGRESSO === "day") {
       dataLimite = new Date();
       dataLimite.setDate(dataResgate.getDate() + 1);
       NUMERO_ATRACOES = null;
-    } else if (TIPO_INGRESSO === "anual-pass") {
+    } else if (TIPO_INGRESSO === "anual") {
       dataLimite = new Date();
       dataLimite.setDate(dataResgate.getDate() + 365);
       NUMERO_ATRACOES = null;
-    } else if (TIPO_INGRESSO === "stardard-pass") {
+    } else if (TIPO_INGRESSO === "standard") {
       dataLimite = null;
       NUMERO_ATRACOES = 10;
     } else {
@@ -110,17 +112,47 @@ app.get("/Ingresso", (req, res) => {
   });
 });
 
-// GET /Ingresso/:id - Buscar ingresso por ID
-app.get("/Ingresso/:id", (req, res) => {
-  db.get(`SELECT * FROM ingresso WHERE ID = ?`, [req.params.id], (err, row) => {
-    if (err) {
-      console.error("Erro ao buscar ingresso:", err.message);
-      return res.status(500).send("Erro ao buscar ingresso.");
+// GET /Ingresso/validar/:id - Valida utilidade do ingresso por ID
+app.get("/Ingresso/validar/:id", (req, res) => {
+  const ID = req.params.id;
+
+  db.get("SELECT * FROM ingresso WHERE ID = ?", [ID], (err, ingresso) => {
+    if (!ingresso) {
+      return res.status(404).json({ error: "Ingresso não encontrado" });
     }
-    if (!row) {
-      return res.status(404).send("Ingresso não encontrado.");
+
+    const dataAtual = new Date();
+
+    if (ingresso.TIPO_INGRESSO === "standard") {
+      if (ingresso.NUMERO_ATRACOES === 0) {
+        return res.status(400).json({
+          error: "Ingresso do tipo standard já foi completamente utilizado",
+          atracoes_restantes: 0,
+        });
+      }
+      return res.status(200).json({
+        message: "Ingresso válido",
+        tipo_ingresso: ingresso.TIPO_INGRESSO,
+        atracoes_restantes: ingresso.NUMERO_ATRACOES,
+      });
     }
-    res.status(200).json(row);
+
+    if (ingresso.DATA_LIMITE) {
+      const dataLimite = new Date(ingresso.DATA_LIMITE);
+
+      if (dataLimite < dataAtual) {
+        return res.status(400).json({
+          error: "Data de uso do ingresso já venceu",
+          data_atual: dataAtual.toLocaleString("pt-BR"),
+          data_limite: dataLimite.toLocaleString("pt-BR"),
+        });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Ingresso válido",
+      tipo_ingresso: ingresso.TIPO_INGRESSO,
+    });
   });
 });
 
@@ -174,6 +206,127 @@ app.delete("/Ingresso/:id", (req, res) => {
     }
     res.status(200).send("Ingresso removido com sucesso!");
   });
+});
+
+// POST - /Ingresso/Atracao/:cpf - Cadastra um acesso a uma atração de acordo com ingresso de um usuario cadastrado
+app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
+  try {
+    const { cpf } = req.params;
+    const { id } = req.body;
+
+    // Valida se o ID foi enviado
+    if (!id) {
+      return res.status(400).json({ error: "ID da atração não foi informado." });
+    }
+
+    // Busca atração VIA AXIOS
+    let atracao;
+    try {
+      atracao = await axios.get(`http://localhost:8100/Atracao/${id}`);
+    } catch (error) {
+      console.error("Erro ao buscar atração:", error.message);
+      return res.status(404).json({ error: "Atração não encontrada." });
+    }
+
+    // Busca cadastro VIA AXIOS
+    let cadastro;
+    try {
+      cadastro = await axios.get(`http://localhost:8080/Cadastro/${cpf}`);
+    } catch (error) {
+      console.error("Erro ao buscar cadastro:", error.message);
+      return res.status(404).json({ error: "Cadastro não encontrado." });
+    }
+
+    let fila;
+    try {
+      fila = await axios.get(`http://localhost:8110/Fila/${id}`);
+    } catch (error) {
+      console.error("Erro ao buscar fila:", error.message);
+      return res.status(404).json({ error: "Fila não encontrada." });
+    }
+
+    const tamanho_fila = fila.data.pessoas;
+    let posicao_fila = "Entrada direta";
+    
+    // Só adiciona pessoa na fila se já tiver gente esperando (fila > 0)
+    if (tamanho_fila > 0) {
+      try {
+        await axios.patch(`http://localhost:8110/Fila/${id}`, {
+          pessoas: tamanho_fila + 1
+        });
+        posicao_fila = tamanho_fila + 1;
+        console.log(`Pessoa adicionada à fila da atração ${id}. Total: ${tamanho_fila + 1}`);
+      } catch (error) {
+        console.error("Erro ao adicionar pessoa na fila:", error.message);
+        return res.status(500).json({ error: "Erro ao atualizar fila." });
+      }
+    } else {
+      console.log(`Fila vazia. Pessoa entra direto na atração ${id}`);
+    }
+
+    db.get("SELECT * FROM ingresso WHERE CPF = ? LIMIT 1", [cpf], (err, ingresso) => {
+      if (!ingresso) {
+        return res.status(404).json({ error: "Ingresso não encontrado para este CPF." });
+      }
+
+      // Se for ingresso standard
+      if (ingresso.TIPO_INGRESSO === "standard") {
+        if (ingresso.NUMERO_ATRACOES <= 0) {
+          return res.status(400).json({ error: "Ingresso sem atrações restantes" });
+        }
+
+        // Atualiza o número de atrações direto no banco
+        db.run(
+          "UPDATE ingresso SET NUMERO_ATRACOES = ? WHERE ID = ?",
+          [ingresso.NUMERO_ATRACOES - 1, ingresso.ID],
+          (updateErr) => {
+            if (updateErr) {
+              console.error("Erro ao atualizar ingresso:", updateErr.message);
+              return res.status(500).json({ error: "Erro ao atualizar ingresso" });
+            }
+
+            return res.status(200).json({
+              message: "Acesso à atração confirmado!",
+              atracao: atracao.data.nome,
+              posicao_fila: posicao_fila,
+              tipo_ingresso: ingresso.TIPO_INGRESSO,
+              atracoes_restantes: ingresso.NUMERO_ATRACOES - 1,
+            });
+          }
+        );
+      }
+      // Se for ingresso day ou anual
+      else if (ingresso.TIPO_INGRESSO === "day" || ingresso.TIPO_INGRESSO === "anual") {
+        if (ingresso.DATA_LIMITE) {
+          const dataLimite = new Date(ingresso.DATA_LIMITE);
+          const dataAtual = new Date();
+
+          if (dataLimite < dataAtual) {
+            return res.status(400).json({
+              error: "Ingresso com data de validade expirada."
+            });
+          }
+        }
+
+        return res.status(200).json({
+          message: "Acesso à atração confirmado!",
+          atracao: atracao.data.nome,
+          posicao_fila: posicao_fila,
+          tipo_ingresso: ingresso.TIPO_INGRESSO,
+          atracoes_restantes: "Ilimitado"
+        });
+      } else {
+        return res.status(400).json({
+          error: "Tipo de ingresso inválido para acesso à atração."
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error("Erro ao processar acesso à atração:", error.message);
+    console.error(error.stack);
+    return res.status(500).json({ error: "Erro ao processar a requisição." });
+  }
 });
 
 // Porta

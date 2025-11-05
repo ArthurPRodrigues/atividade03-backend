@@ -43,7 +43,7 @@ app.post("/Atracao", async (req, res) => {
         req.body.nome,
         req.body.capacidade,
         req.body.tempo_medio,
-        status
+        status,
       ],
       async (err) => {
         if (err) {
@@ -57,7 +57,7 @@ app.post("/Atracao", async (req, res) => {
         try {
           const filaResponse = await axios.post("http://localhost:8110/Fila", {
             id_atracao: req.body.id,
-            pessoas: 0
+            pessoas: 0,
           });
 
           console.log(`Fila criada para a atração ID ${req.body.id}.`);
@@ -68,9 +68,9 @@ app.post("/Atracao", async (req, res) => {
               nome: req.body.nome,
               capacidade: req.body.capacidade,
               tempo_medio: req.body.tempo_medio,
-              status
+              status,
             },
-            fila: filaResponse.data
+            fila: filaResponse.data,
           });
         } catch (filaError) {
           console.error("Erro ao criar fila:", filaError.message);
@@ -81,8 +81,8 @@ app.post("/Atracao", async (req, res) => {
               nome: req.body.nome,
               capacidade: req.body.capacidade,
               tempo_medio: req.body.tempo_medio,
-              status
-            }
+              status,
+            },
           });
         }
       }
@@ -124,11 +124,7 @@ app.get("/Atracao/:id", (req, res) => {
 app.patch("/Atracao/:id", (req, res) => {
   const { nome, capacidade, tempo_medio } = req.body;
   const status =
-    req.body.status === undefined
-      ? undefined
-      : req.body.status
-      ? 1
-      : 0;
+    req.body.status === undefined ? undefined : req.body.status ? 1 : 0;
 
   db.run(
     `UPDATE atracao

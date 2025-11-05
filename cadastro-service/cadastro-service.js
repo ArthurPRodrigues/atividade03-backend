@@ -24,7 +24,8 @@ db.run(
     (nome TEXT NOT NULL, 
      email TEXT NOT NULL, 
      cpf INTEGER PRIMARY KEY NOT NULL UNIQUE,
-     telefone TEXT)`,
+     telefone TEXT NOT NULL
+    )`,
   [],
   (err) => {
     if (err) {
@@ -44,7 +45,6 @@ app.post("/Cadastro", (req, res, next) => {
         console.log("Erro: " + err);
         res.status(500).send("Erro ao cadastrar cliente.");
       } else {
-        const cpf = req.body.cpf;
         console.log("Cliente cadastrado com sucesso!");
         res.status(200).send("Cliente cadastrado com sucesso!");
       }
