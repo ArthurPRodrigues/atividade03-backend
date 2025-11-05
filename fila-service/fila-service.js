@@ -6,16 +6,14 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Conexão com o banco de dados
 var db = new sqlite3.Database("./dados_filas.db", (err) => {
   if (err) {
     console.log("ERRO: não foi possível conectar ao SQLite.");
     throw err;
   }
-  console.log("Conectado ao banco de filas!");
+  console.log("Conectado ao banco de filas");
 });
 
-// Criação da tabela
 db.run(
   `CREATE TABLE IF NOT EXISTS fila (
     id_atracao INTEGER PRIMARY KEY,
@@ -27,7 +25,7 @@ db.run(
   }
 );
 
-// Criar nova fila (inicialmente com 0 pessoas) FUNCIONA
+// Criar nova fila com 0 pessoas FUNCIONA
 app.post("/Fila", async (req, res) => {
   const { id_atracao, pessoas } = req.body;
 
@@ -40,22 +38,18 @@ app.post("/Fila", async (req, res) => {
         return res.status(500).send("Erro ao criar fila.");
       }
 
-      console.log(`Fila criada com sucesso para atração ${id_atracao}.`);
-
       try {
         // passa atracao para true caso seja false
         await axios.patch(`http://localhost:8100/Atracao/${id_atracao}`, { status: true });
-        console.log(`Atração ${id_atracao} ativada com sucesso.`);
 
         const atracaoResp = await axios.get(`http://localhost:8100/Atracao/${id_atracao}`);
         const atracao = atracaoResp.data;
 
-        console.log(`Tempo de espera inicial criado para ${atracao.nome}.`);
       } catch (error) {
-        console.warn("Aviso: falha ao atualizar atração ou espera:", error.message);
+        console.warn("Erro na hora de atualizar atração ou espera:", error.message);
       }
 
-      res.status(201).send("Fila criada, atração ativada e espera inicial registrada!");
+      res.status(201).send("Fila criada, atração em funcionamento e espera adicionada");
     }
   );
 });
@@ -70,12 +64,12 @@ app.patch("/Fila/:id_atracao", (req, res) => {
       if (err) return res.status(500).send("Erro ao atualizar fila.");
       if (this.changes === 0)
         return res.status(404).send("Fila não encontrada.");
-      res.send("Fila atualizada com sucesso!");
+      res.send("Fila atualizada");
     }
   );
 });
 
-// Obter número de pessoas de uma fila FUNCIONA
+// Lista uma fila FUNCIONA - isso aqui tbm serve pro serviço e espera
 app.get("/Fila/:id_atracao", (req, res) => {
   db.get(
     `SELECT * FROM fila WHERE id_atracao = ?`,
@@ -99,7 +93,7 @@ app.get("/Fila", (req, res) => {
 
 // Deleta fila FUNCIONA
 app.delete("/Fila/:id_atracao", async (req, res) => {
-  const id = Number(req.params.id_atracao); // 🔹 conversão explícita
+  const id = Number(req.params.id_atracao); // Aqui tem que deixar assim pra converter de string pra número
 
   db.run(`DELETE FROM fila WHERE id_atracao = ?`, [id], async function (err) {
     if (err) {
@@ -108,17 +102,13 @@ app.delete("/Fila/:id_atracao", async (req, res) => {
     }
 
     if (this.changes === 0) {
-      console.log(`Fila com id_atracao ${id} não encontrada.`);
       return res.status(404).send("Fila não encontrada.");
     }
-
-    console.log(`Fila ${id} removida com sucesso!`);
 
     try {
       // Coloca atração em manutenção
       await axios.patch(`http://localhost:8100/Atracao/${id}`, { status: false });
 
-      console.log(`Atração ${id} colocada em manutenção e espera removida.`);
     } catch (error) {
       if (error.response) {
         console.warn(
@@ -129,12 +119,11 @@ app.delete("/Fila/:id_atracao", async (req, res) => {
       }
     }
 
-    res.status(200).send("Fila removida, atração em manutenção e espera excluída!");
+    res.status(200).send("Fila removida, atração em manutenção e espera deletada");
   });
 });
 
 
-// Iniciar servidor
 app.listen(8110, () => {
-  console.log("Serviço de Filas rodando na porta 8110");
+  console.log("Filas rodando na porta 8110");
 });

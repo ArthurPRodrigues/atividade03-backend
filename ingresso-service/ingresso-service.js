@@ -6,16 +6,14 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Banco de dados
 var db = new sqlite3.Database("./dados_ingressos.db", (err) => {
   if (err) {
     console.log("ERRO: não foi possível conectar ao SQLite.");
     throw err;
   }
-  console.log("Conectado ao banco de ingressos!");
+  console.log("Conectado ao banco de ingresso");
 });
 
-// Criação da tabela
 db.run(
   `CREATE TABLE IF NOT EXISTS ingresso (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +30,7 @@ db.run(
 );
 
 //todo: verificar uma maneira melhor de formatar as datas e deixar no modelo UTC -3 --- Po, isso aqui não é necessário não, deixa baixo
-// POST /Ingresso - Cadastrar novo ingresso
+// POST FUNCIONA
 app.post("/Ingresso/:cpf", async (req, res) => {
   try {
     const cpf = req.params.cpf;
@@ -66,7 +64,6 @@ app.post("/Ingresso/:cpf", async (req, res) => {
       return res.status(400).json({ error: "Tipo de ingresso é inválido." });
     }
 
-    // Insere o ingresso no banco
     db.run(
       `INSERT INTO ingresso (CPF, TIPO_INGRESSO, NUMERO_ATRACOES, DATA_RESGATE, DATA_LIMITE)
        VALUES (?, ?, ?, ?, ?)`,
@@ -83,9 +80,8 @@ app.post("/Ingresso/:cpf", async (req, res) => {
           return res.status(500).send("Erro ao cadastrar ingresso.");
         }
 
-        console.log(`Ingresso criado para o CPF ${cpf}!`);
         res.status(201).json({
-          message: "Ingresso cadastrado com sucesso!",
+          message: "Ingresso cadastrado",
           id: this.lastID,
           cpf,
           TIPO_INGRESSO,
@@ -101,7 +97,7 @@ app.post("/Ingresso/:cpf", async (req, res) => {
   }
 });
 
-// GET /Ingresso - Listar todos os ingressos
+// GET pra todos FUNCIONA
 app.get("/Ingresso", (req, res) => {
   db.all(`SELECT * FROM ingresso`, [], (err, rows) => {
     if (err) {
@@ -156,7 +152,7 @@ app.get("/Ingresso/validar/:id", (req, res) => {
   });
 });
 
-// GET /Ingresso/usuario/:cpf - Buscar ingressos de um usuário
+// GET pra um só FUNCIONA
 app.get("/Ingresso/usuario/:cpf", (req, res) => {
   db.all(
     `SELECT * FROM ingresso WHERE CPF = ?`,
@@ -171,7 +167,7 @@ app.get("/Ingresso/usuario/:cpf", (req, res) => {
   );
 });
 
-// PATCH /Ingresso/:id - Atualizar ingresso
+// PATCH FUNCIONA
 app.patch("/Ingresso/:id", (req, res) => {
   const { TIPO_INGRESSO, NUMERO_ATRACOES } = req.body;
 
@@ -194,7 +190,7 @@ app.patch("/Ingresso/:id", (req, res) => {
   );
 });
 
-// DELETE /Ingresso/:id - Remover ingresso
+// DELETE FUNCIONA
 app.delete("/Ingresso/:id", (req, res) => {
   db.run(`DELETE FROM ingresso WHERE ID = ?`, [req.params.id], function (err) {
     if (err) {
@@ -208,7 +204,7 @@ app.delete("/Ingresso/:id", (req, res) => {
   });
 });
 
-// POST - /Ingresso/Atracao/:cpf - Cadastra um acesso a uma atração de acordo com ingresso de um usuario cadastrado
+// POST - /Ingresso/Atracao/:cpf - Cadastra um acesso a uma atração de acordo com ingresso de um usuario cadastrado ---- Não entendi isso aqui
 app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
   try {
     const { cpf } = req.params;
@@ -309,7 +305,7 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
         }
 
         return res.status(200).json({
-          message: "Acesso à atração confirmado!",
+          message: "Acesso à atração confirmado",
           atracao: atracao.data.nome,
           posicao_fila: posicao_fila,
           tipo_ingresso: ingresso.TIPO_INGRESSO,
@@ -323,13 +319,11 @@ app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Erro ao processar acesso à atração:", error.message);
     console.error(error.stack);
     return res.status(500).json({ error: "Erro ao processar a requisição." });
   }
 });
 
-// Porta
 const PORT = process.env.PORT || 8090;
 app.listen(PORT, () => {
   console.log(`Serviço de Ingressos rodando na porta ${PORT}`);

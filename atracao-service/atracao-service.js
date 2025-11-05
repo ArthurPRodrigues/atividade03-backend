@@ -6,16 +6,14 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Conecta com banco
 var db = new sqlite3.Database("./dados_atracoes.db", (err) => {
   if (err) {
     console.log("ERRO: não foi possível conectar ao SQLite.");
     throw err;
   }
-  console.log("Conectado ao banco de atrações!");
+  console.log("Banco conectado");
 });
 
-// Cria a tabela se ainda não tiver
 db.run(
   `CREATE TABLE IF NOT EXISTS atracao (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +31,7 @@ db.run(
 // Cadastrar nova atração + fila + espera
 app.post("/Atracao", async (req, res) => {
   try {
-    const status = req.body.status === false ? 0 : 1; // 1 = funcionando, 0 = manutenção
+    const status = req.body.status === false ? 0 : 1; // 1 = É funcionado, 0 = é em manutenção
 
     db.run(
       `INSERT INTO atracao (id, nome, capacidade, tempo_medio, status) VALUES (?, ?, ?, ?, ?)`,
@@ -46,22 +44,16 @@ app.post("/Atracao", async (req, res) => {
       ],
       async (err) => {
         if (err) {
-          console.error("Erro ao cadastrar atração:", err.message);
-          return res.status(500).send("Erro ao cadastrar atração.");
+          return res.status(500).send("Erro na hora de cadastrar atração");
         }
 
-        console.log(`Atração '${req.body.nome}' cadastrada com sucesso!`);
-
-        // Cria fila e espera associadas
+        // Cria fila +espera
         try {
-          // Cria fila
           const filaResponse = await axios.post("http://localhost:8110/Fila", {
             id_atracao: req.body.id,
             pessoas: 0,
           });
-          console.log(`Fila criada para a atração ID ${req.body.id}.`);
 
-          // Cria espera
           const esperaResponse = await axios.post(
             "http://localhost:8120/Espera",
             {
@@ -73,10 +65,8 @@ app.post("/Atracao", async (req, res) => {
               tempo_estimado: "Calculando...",
             }
           );
-          console.log(`Espera criada para a atração ID ${req.body.id}.`);
 
           return res.status(201).json({
-            message: "Atração, fila e espera criadas com sucesso!",
             atracao: {
               id: req.body.id,
               nome: req.body.nome,
@@ -89,12 +79,12 @@ app.post("/Atracao", async (req, res) => {
           });
         } catch (subErr) {
           console.error(
-            "Erro ao criar fila ou espera para a atração:",
+            "Erro na hora de criar fila ou espera da atração:",
             subErr.message
           );
           return res.status(201).json({
             message:
-              "Atração cadastrada, mas não foi possível criar fila e/ou espera.",
+              "Atração ok, checar criar fila e/ou espera.",
           });
         }
       }
@@ -164,38 +154,34 @@ app.patch("/Atracao/:id", (req, res) => {
      WHERE id = ?`,
     [nome, capacidade, tempo_medio, status, req.params.id],
     function (err) {
-      if (err) return res.status(500).send("Erro ao atualizar atração.");
+      if (err) return res.status(500).send("Erro no patch da atração.");
       if (this.changes === 0)
         return res.status(404).send("Atração não encontrada.");
-      res.send("Atração atualizada com sucesso!");
+      res.send("Atração patch ok");
     }
   );
 });
 
-// Deletar espera, fila e atração NESSA ORDEM
+// Deletar espera, fila e atração NESSA ORDEM!!!
 app.delete("/Atracao/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`Requisição para deletar atração ${id}`);
-
     // Deleta a espera
     try {
       await axios.delete(`http://localhost:8120/Espera/${id}`);
-      console.log(`Espera da atração ${id} removida com sucesso.`);
     } catch (esperaErr) {
       console.warn(
-        `Aviso: não foi possível remover a espera da atração ${id} - ${esperaErr.message}`
+        `Não removeu a espera da atração ${id} - ${esperaErr.message}`
       );
     }
 
     // Deleta a fila
     try {
       await axios.delete(`http://localhost:8110/Fila/${id}`);
-      console.log(`Fila da atração ${id} removida com sucesso.`);
     } catch (filaErr) {
       console.warn(
-        `Aviso: não foi possível remover a fila da atração ${id} - ${filaErr.message}`
+        `Não removeu a fila da atração ${id} - ${filaErr.message}`
       );
     }
 
@@ -207,7 +193,6 @@ app.delete("/Atracao/:id", async (req, res) => {
       }
 
       if (this.changes === 0) {
-        console.warn(`Atração ${id} não encontrada no banco.`);
         return res.status(404).send("Atração não encontrada.");
       }
 
@@ -216,11 +201,11 @@ app.delete("/Atracao/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("Erro ao excluir atração:", error.message);
-    res.status(500).send("Erro interno ao excluir atração.");
+    res.status(500).send("Erro ao excluir atração:");
   }
 });
 
 // Servidor ouvindo na porta 8100
 app.listen(8100, () => {
-  console.log("Serviço de Atrações rodando na porta 8100");
+  console.log("Atracao rodando na porta 8100");
 });
