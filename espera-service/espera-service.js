@@ -104,7 +104,7 @@ async function atualizarTemposDeEspera() {
       );
     }
 
-    console.log(`⏱️ Atualização concluída às ${new Date().toLocaleTimeString()}`);
+    console.log(`Atualização concluída às ${new Date().toLocaleTimeString()}`);
   } catch (error) {
     console.error("Erro ao atualizar tempos de espera:", error.message);
   }
