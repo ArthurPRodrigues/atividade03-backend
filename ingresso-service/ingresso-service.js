@@ -19,9 +19,9 @@ db.run(
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     CPF INTEGER NOT NULL,
     TIPO_INGRESSO TEXT NOT NULL,
-    NUMERO_ATRACOES INTEGER NOT NULL,
+    NUMERO_ATRACOES INTEGER,
     DATA_RESGATE TEXT NOT NULL,
-    DATA_LIMITE TEXT NOT NULL
+    DATA_LIMITE TEXT
   )`,
   [],
   (err) => {
@@ -29,7 +29,6 @@ db.run(
   }
 );
 
-//todo: verificar uma maneira melhor de formatar as datas e deixar no modelo UTC -3 --- Po, isso aqui não é necessário não, deixa baixo
 // POST FUNCIONA
 app.post("/Ingresso/:cpf", async (req, res) => {
   try {
@@ -204,127 +203,144 @@ app.delete("/Ingresso/:id", (req, res) => {
   });
 });
 
-// POST - /Ingresso/Atracao/:cpf - Cadastra um acesso a uma atração de acordo com ingresso de um usuario cadastrado ---- Não entendi isso aqui
+// POST - /Ingresso/Atracao/:cpf - Cadastra um acesso a uma atração de acordo com ingresso de um usuário cadastrado
 app.post("/Ingresso/Atracao/:cpf", async (req, res) => {
   try {
-    const { cpf } = req.params;
-    const { id } = req.body;
-
-    // Valida se o ID foi enviado
-    if (!id) {
-      return res.status(400).json({ error: "ID da atração não foi informado." });
+    const cpf = req.params.cpf;
+    const { id_atracao, id_ingresso } = req.body;
+    console.log("CPF:", cpf, "ID Atração:", id_atracao, "ID Ingresso:", id_ingresso);
+    
+    if (!id_atracao || !id_ingresso) {
+      return res.status(400).json({
+        error: "ID da atração e ID do ingresso devem ser informados.",
+      });
     }
 
-    // Busca atração VIA AXIOS
-    let atracao;
-    try {
-      atracao = await axios.get(`http://localhost:8100/Atracao/${id}`);
-    } catch (error) {
-      console.error("Erro ao buscar atração:", error.message);
-      return res.status(404).json({ error: "Atração não encontrada." });
-    }
-
-    // Busca cadastro VIA AXIOS
+    // Busca cadastro via AXIOS usando o CPF da URL
     let cadastro;
     try {
-      cadastro = await axios.get(`http://localhost:8080/Cadastro/${cpf}`);
+      const cadastroResponse = await axios.get(
+        `http://localhost:8080/Cadastro/${cpf}`
+      );
+      cadastro = cadastroResponse.data;
     } catch (error) {
       console.error("Erro ao buscar cadastro:", error.message);
       return res.status(404).json({ error: "Cadastro não encontrado." });
     }
 
-    let fila;
+    // Busca atração via AXIOS
+    let atracao;
     try {
-      fila = await axios.get(`http://localhost:8110/Fila/${id}`);
+      const atracaoResponse = await axios.get(
+        `http://localhost:8100/Atracao/${id_atracao}`
+      );
+      atracao = atracaoResponse.data;
+    } catch (error) {
+      console.error("Erro ao buscar atração:", error.message);
+      return res.status(404).json({ error: "Atração não encontrada." });
+    }
+
+    // Busca ingresso no banco e verifica se pertence ao CPF informado
+    const ingresso = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM ingresso WHERE ID = ? AND CPF = ?`,
+        [id_ingresso, cpf],
+        (err, row) => {
+          if (err) {
+            console.error("Erro ao buscar ingresso:", err.message);
+            return reject(err);
+          }
+          if (!row) {
+            return reject(new Error("Ingresso não encontrado ou não pertence ao CPF informado."));
+          }
+          resolve(row);
+        }
+      );
+    });
+
+    // Busca fila via AXIOS
+    let fila;
+    let posicao_fila;
+    try {
+      const filaResponse = await axios.get(
+        `http://localhost:8110/Fila/${id_atracao}`
+      );
+      fila = filaResponse.data;
+      posicao_fila = fila.pessoas;
     } catch (error) {
       console.error("Erro ao buscar fila:", error.message);
       return res.status(404).json({ error: "Fila não encontrada." });
     }
 
-    const tamanho_fila = fila.data.pessoas;
-    let posicao_fila = "Entrada direta";
-    
-    // Só adiciona pessoa na fila se já tiver gente esperando (fila > 0)
-    if (tamanho_fila > 0) {
-      try {
-        await axios.patch(`http://localhost:8110/Fila/${id}`, {
-          pessoas: tamanho_fila + 1
-        });
-        posicao_fila = tamanho_fila + 1;
-        console.log(`Pessoa adicionada à fila da atração ${id}. Total: ${tamanho_fila + 1}`);
-      } catch (error) {
-        console.error("Erro ao adicionar pessoa na fila:", error.message);
-        return res.status(500).json({ error: "Erro ao atualizar fila." });
-      }
-    } else {
-      console.log(`Fila vazia. Pessoa entra direto na atração ${id}`);
+    // Verifica se tudo foi encontrado
+    if (!atracao || !ingresso || !cadastro) {
+      return res.status(404).json({ error: "Informações não encontradas." });
     }
 
-    db.get("SELECT * FROM ingresso WHERE CPF = ? LIMIT 1", [cpf], (err, ingresso) => {
-      if (!ingresso) {
-        return res.status(404).json({ error: "Ingresso não encontrado para este CPF." });
-      }
-
-      // Se for ingresso standard
-      if (ingresso.TIPO_INGRESSO === "standard") {
-        if (ingresso.NUMERO_ATRACOES <= 0) {
-          return res.status(400).json({ error: "Ingresso sem atrações restantes" });
-        }
-
-        // Atualiza o número de atrações direto no banco
-        db.run(
-          "UPDATE ingresso SET NUMERO_ATRACOES = ? WHERE ID = ?",
-          [ingresso.NUMERO_ATRACOES - 1, ingresso.ID],
-          (updateErr) => {
-            if (updateErr) {
-              console.error("Erro ao atualizar ingresso:", updateErr.message);
-              return res.status(500).json({ error: "Erro ao atualizar ingresso" });
-            }
-
-            return res.status(200).json({
-              message: "Acesso à atração confirmado!",
-              atracao: atracao.data.nome,
-              posicao_fila: posicao_fila,
-              tipo_ingresso: ingresso.TIPO_INGRESSO,
-              atracoes_restantes: ingresso.NUMERO_ATRACOES - 1,
-            });
-          }
-        );
-      }
-      // Se for ingresso day ou anual
-      else if (ingresso.TIPO_INGRESSO === "day" || ingresso.TIPO_INGRESSO === "anual") {
-        if (ingresso.DATA_LIMITE) {
-          const dataLimite = new Date(ingresso.DATA_LIMITE);
-          const dataAtual = new Date();
-
-          if (dataLimite < dataAtual) {
-            return res.status(400).json({
-              error: "Ingresso com data de validade expirada."
-            });
-          }
-        }
-
-        return res.status(200).json({
-          message: "Acesso à atração confirmado",
-          atracao: atracao.data.nome,
-          posicao_fila: posicao_fila,
-          tipo_ingresso: ingresso.TIPO_INGRESSO,
-          atracoes_restantes: "Ilimitado"
-        });
-      } else {
+    // --- Verifica tipo de ingresso STANDARD ---
+    if (ingresso.TIPO_INGRESSO === "standard") {
+      if (ingresso.NUMERO_ATRACOES <= 0) {
         return res.status(400).json({
-          error: "Tipo de ingresso inválido para acesso à atração."
+          error:
+            "Ingresso sem atrações restantes, selecione um ingresso válido.",
         });
       }
-    });
 
-  } catch (error) {
-    console.error(error.stack);
-    return res.status(500).json({ error: "Erro ao processar a requisição." });
+      // Atualiza a fila
+      const fila_atualizada = fila.pessoas + 1;
+      await axios.patch(`http://localhost:8110/Fila/${id_atracao}`, {
+        pessoas: fila_atualizada,
+      });
+
+      // Atualiza número de atrações no banco
+      db.run(
+        "UPDATE ingresso SET NUMERO_ATRACOES = ? WHERE ID = ?",
+        [ingresso.NUMERO_ATRACOES - 1, ingresso.ID],
+        (updateErr) => {
+          if (updateErr) {
+            console.error("Erro ao atualizar ingresso:", updateErr.message);
+            return res
+              .status(500)
+              .json({ error: "Erro ao atualizar ingresso." });
+          }
+
+          return res.status(200).json({
+            message: "Acesso à atração confirmado!",
+            atracao: atracao.nome,
+            posicao_fila: fila_atualizada,
+            tipo_ingresso: ingresso.TIPO_INGRESSO,
+            atracoes_restantes: ingresso.NUMERO_ATRACOES - 1,
+          });
+        }
+      );
+    }
+
+    // --- Verifica tipo de ingresso DAY ou ANUAL ---
+    else if (
+      ingresso.TIPO_INGRESSO === "anual" ||
+      ingresso.TIPO_INGRESSO === "day"
+    ) {
+      const fila_atualizada = fila.pessoas + 1;
+      await axios.patch(`http://localhost:8110/Fila/${id_atracao}`, {
+        pessoas: fila_atualizada,
+      });
+      return res.status(200).json({
+        message: "Acesso à atração confirmado!",
+        atracao: atracao.nome,
+        posicao_fila: fila_atualizada,
+        tipo_ingresso: ingresso.TIPO_INGRESSO,
+        atracoes_restantes: "Ilimitado",
+      });
+    } else {
+      return res.status(400).json({
+        error: "Tipo de ingresso inválido para acesso à atração.",
+      });
+    }
+  } catch (err) {
+    console.error("Erro interno:", err.message);
+    return res.status(500).json({ error: "Erro interno no servidor." });
   }
 });
-
-const PORT = process.env.PORT || 8090;
-app.listen(PORT, () => {
-  console.log(`Serviço de Ingressos rodando na porta ${PORT}`);
-});
+app.listen(8090, () =>
+  console.log("Controle de Ingressos rodando na porta 8090")
+);
