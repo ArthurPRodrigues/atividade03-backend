@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Conecta com o banco SQLite
+// Conecta com banco
 var db = new sqlite3.Database("./dados_atracoes.db", (err) => {
   if (err) {
     console.log("ERRO: não foi possível conectar ao SQLite.");
@@ -15,7 +15,7 @@ var db = new sqlite3.Database("./dados_atracoes.db", (err) => {
   console.log("Conectado ao banco de atrações!");
 });
 
-// Cria a tabela, se não existir
+// Cria a tabela se ainda não tiver
 db.run(
   `CREATE TABLE IF NOT EXISTS atracao (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +35,6 @@ app.post("/Atracao", async (req, res) => {
   try {
     const status = req.body.status === false ? 0 : 1; // 1 = funcionando, 0 = manutenção
 
-    // Inserir a atração no banco local
     db.run(
       `INSERT INTO atracao (id, nome, capacidade, tempo_medio, status) VALUES (?, ?, ?, ?, ?)`,
       [
@@ -98,7 +97,7 @@ app.get("/Atracao", (req, res) => {
   db.all(`SELECT * FROM atracao`, [], (err, rows) => {
     if (err) return res.status(500).send("Erro ao listar atrações.");
 
-    // Converter 0/1 em boolean
+    // Conversor booleano
     const atracoes = rows.map((a) => ({
       ...a,
       status: !!a.status,
@@ -108,13 +107,13 @@ app.get("/Atracao", (req, res) => {
   });
 });
 
-// Consultar uma atração por ID FUNCIONA
+// Consultar atraçao com ID FUNCIONA
 app.get("/Atracao/:id", (req, res) => {
   db.get(`SELECT * FROM atracao WHERE id = ?`, [req.params.id], (err, row) => {
     if (err) return res.status(500).send("Erro ao consultar atração.");
     if (!row) return res.status(404).send("Atração não encontrada.");
 
-    // Converter 0/1 em boolean
+    // Conversor Booleano
     row.status = !!row.status;
     res.json(row);
   });
@@ -123,8 +122,18 @@ app.get("/Atracao/:id", (req, res) => {
 // Atualizar dados da atração FUNCIONA
 app.patch("/Atracao/:id", (req, res) => {
   const { nome, capacidade, tempo_medio } = req.body;
-  const status =
-    req.body.status === undefined ? undefined : req.body.status ? 1 : 0;
+
+  // Converte 'status' corretamente, seja booleano ou string
+  let status;
+  if (req.body.status !== undefined) {
+    if (req.body.status === true || req.body.status === "true" || req.body.status === 1 || req.body.status === "1") {
+      status = 1;
+    } else if (req.body.status === false || req.body.status === "false" || req.body.status === 0 || req.body.status === "0") {
+      status = 0;
+    } else {
+      status = undefined;
+    }
+  }
 
   db.run(
     `UPDATE atracao
@@ -143,14 +152,31 @@ app.patch("/Atracao/:id", (req, res) => {
   );
 });
 
-// Remover atração FUNCIONA
-app.delete("/Atracao/:id", (req, res) => {
-  db.run(`DELETE FROM atracao WHERE id = ?`, [req.params.id], function (err) {
-    if (err) return res.status(500).send("Erro ao remover atração.");
-    if (this.changes === 0)
-      return res.status(404).send("Atração não encontrada.");
-    res.send("Atração removida com sucesso!");
-  });
+
+// Deletar atraçõa
+app.delete("/Atracao/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    db.run(`DELETE FROM atracao WHERE id = ?`, [id], async function (err) {
+      if (err) return res.status(500).send("Erro ao remover atração.");
+      if (this.changes === 0)
+        return res.status(404).send("Atração não encontrada.");
+
+      try {
+        // Manda o delete pra fila
+        await axios.delete(`http://localhost:8110/Fila/${id}`);
+        console.log(`Fila da atração ${id} removida com sucesso.`);
+      } catch (filaErr) {
+        console.warn(`Aviso: fila da atração ${id} não pôde ser removida.`);
+      }
+
+
+      res.send("Atração e sua fila removidas");
+    });
+  } catch (error) {
+    console.error("Erro ao excluir atração:", error.message);
+    res.status(500).send("Erro interno ao excluir atração.");
+  }
 });
 
 // Servidor ouvindo na porta 8100

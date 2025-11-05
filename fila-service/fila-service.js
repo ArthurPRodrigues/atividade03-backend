@@ -27,14 +27,29 @@ db.run(
 );
 
 // Criar nova fila (inicialmente com 0 pessoas) FUNCIONA
-app.post("/Fila", (req, res) => {
+app.post("/Fila", async (req, res) => {
   const { id_atracao, pessoas } = req.body;
+
   db.run(
     `INSERT INTO fila (id_atracao, pessoas) VALUES (?, ?)`,
     [id_atracao, pessoas || 0],
-    (err) => {
-      if (err) return res.status(500).send("Erro ao criar fila.");
-      res.status(201).send("Fila criada com sucesso!");
+    async (err) => {
+      if (err) {
+        console.error("Erro ao criar fila:", err.message);
+        return res.status(500).send("Erro ao criar fila.");
+      }
+
+      console.log(`Fila criada com sucesso para atração ${id_atracao}.`);
+
+      // Da um PATCH na atracao pra colocar ela em manutenção
+      try {
+        await axios.patch(`http://localhost:8100/Atracao/${id_atracao}`, { status: true });
+        console.log(`Atração ${id_atracao} ativada com sucesso.`);
+      } catch (patchErr) {
+        console.warn(`Aviso: não foi possível ativar a atração ${id_atracao}.`);
+      }
+
+      res.status(201).send("Fila criada e atração ativada com sucesso!");
     }
   );
 });
@@ -75,11 +90,12 @@ app.get("/Fila", (req, res) => {
   });
 });
 
-// Método HTTP DELETE /Fila/:id_atracao - remove uma fila específica
-app.delete("/Fila/:id_atracao", (req, res) => {
+const axios = require("axios");
+
+app.delete("/Fila/:id_atracao", async (req, res) => {
   const id = req.params.id_atracao;
 
-  db.run(`DELETE FROM fila WHERE id_atracao = ?`, [id], function (err) {
+  db.run(`DELETE FROM fila WHERE id_atracao = ?`, [id], async function (err) {
     if (err) {
       console.error("Erro ao remover fila:", err.message);
       return res.status(500).send("Erro ao remover fila.");
@@ -91,9 +107,19 @@ app.delete("/Fila/:id_atracao", (req, res) => {
     }
 
     console.log(`Fila ${id} removida com sucesso!`);
-    res.status(200).send("Fila removida com sucesso!");
+
+    // Da um PATCH na atracao pra deixar ela em manutenção
+    try {
+      await axios.patch(`http://localhost:8100/Atracao/${id}`, { status: false });
+      console.log(`Atração ${id} colocada em manutenção com sucesso.`);
+    } catch (patchErr) {
+      console.warn(`Aviso: não foi possível alterar status da atração ${id}.`);
+    }
+
+    res.status(200).send("Fila removida e atração colocada em manutenção!");
   });
 });
+
 
 
 // Iniciar servidor

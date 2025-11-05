@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Cria o banco
+// Conexão com o banco
 var db = new sqlite3.Database("./dados_espera.db", (err) => {
   if (err) {
     console.log("ERRO: não foi possível conectar ao SQLite.");
@@ -15,7 +15,7 @@ var db = new sqlite3.Database("./dados_espera.db", (err) => {
   console.log("Conectado ao banco de tempos de espera!");
 });
 
-// Cria a tabela do banco
+// Criação da tabela
 db.run(
   `CREATE TABLE IF NOT EXISTS espera (
     id_atracao INTEGER PRIMARY KEY,
@@ -23,7 +23,7 @@ db.run(
     pessoas_fila INTEGER,
     capacidade INTEGER,
     tempo_medio INTEGER,
-    tempo_estimado INTEGER,
+    tempo_estimado TEXT,
     atualizado_em TEXT
   )`,
   [],
@@ -32,12 +32,11 @@ db.run(
   }
 );
 
-// Calcula o tempo de espera
+// Função principal de atualização
 async function atualizarTemposDeEspera() {
   try {
-    console.log("\n Atualizando tempos de espera...");
+    console.log("\nAtualizando tempos de espera...");
 
-    // Dois gets pra atração e fila
     const atracoesResp = await axios.get("http://localhost:8100/Atracao");
     const filasResp = await axios.get("http://localhost:8110/Fila");
 
@@ -56,11 +55,21 @@ async function atualizarTemposDeEspera() {
         continue;
       }
 
-      const { id, nome, capacidade, tempo_medio } = atracao;
+      const { id, nome, capacidade, tempo_medio, status } = atracao;
       const pessoas = fila.pessoas;
-
-      const tempoEstimado = Math.ceil((pessoas / capacidade) * tempo_medio);
       const atualizadoEm = new Date().toISOString();
+
+      let tempoEstimado;
+
+      if (status === 0) {
+        // Atração em manutenção
+        tempoEstimado = "Em manutenção";
+      } else {
+        // --- CÁLCULO DO TEMPO DE ESPERA ---
+        // Versão mais realista: desconsidera o grupo atual (usa Math.floor)
+        const ciclos = Math.floor(pessoas / capacidade);
+        tempoEstimado = `${ciclos * tempo_medio} min`;
+      }
 
       // Atualiza banco
       db.run(
@@ -76,17 +85,13 @@ async function atualizarTemposDeEspera() {
         [id, nome, pessoas, capacidade, tempo_medio, tempoEstimado, atualizadoEm],
         (err) => {
           if (err)
-            console.error(
-              `Erro ao salvar tempo de espera para '${nome}':`,
-              err.message
-            );
+            console.error(`Erro ao salvar tempo de espera para '${nome}':`, err.message);
         }
       );
 
-      // Log de cada atração
       console.log(
         `[${nome}] | Fila: ${pessoas} pessoas | Capacidade: ${capacidade} | ` +
-          `Tempo médio: ${tempo_medio} min | Estimado: ${tempoEstimado} min`
+        `Tempo médio: ${tempo_medio} min | Estimado: ${tempoEstimado}`
       );
     }
 
@@ -99,7 +104,7 @@ async function atualizarTemposDeEspera() {
 // Atualiza automaticamente a cada 30 segundos
 setInterval(atualizarTemposDeEspera, 30000);
 
-// Consultar todas as esperas FUNCIONA
+// Consultar todas as esperas
 app.get("/Espera", (req, res) => {
   db.all(`SELECT * FROM espera`, [], (err, rows) => {
     if (err) return res.status(500).send("Erro ao consultar tempos de espera.");
@@ -107,7 +112,7 @@ app.get("/Espera", (req, res) => {
   });
 });
 
-// Consultar espera de uma atração só FUNCIONA
+// Consultar espera de uma atração
 app.get("/Espera/:id_atracao", (req, res) => {
   db.get(
     `SELECT * FROM espera WHERE id_atracao = ?`,
@@ -120,8 +125,8 @@ app.get("/Espera/:id_atracao", (req, res) => {
   );
 });
 
-// Abre porta e atualiza
+// Inicialização
 app.listen(8120, () => {
   console.log("Estimador de Espera rodando na porta 8120");
-  atualizarTemposDeEspera(); // primeira execução automática
+  atualizarTemposDeEspera();
 });
